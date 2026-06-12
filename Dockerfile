@@ -4,8 +4,18 @@ WORKDIR /app
 
 COPY pyproject.toml .
 COPY app/ app/
+COPY alembic/ alembic/
+COPY alembic.ini .
 
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" pydantic pydantic-settings python-dotenv
+RUN pip install --no-cache-dir \
+    fastapi \
+    "uvicorn[standard]" \
+    pydantic \
+    pydantic-settings \
+    python-dotenv \
+    "sqlalchemy[asyncio]" \
+    alembic \
+    "psycopg[binary]"
 
 EXPOSE 8000
 

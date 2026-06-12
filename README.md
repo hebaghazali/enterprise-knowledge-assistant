@@ -11,15 +11,19 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 2)
+## Current scope (PR 3)
 
-Docker Compose local environment with three services:
+PostgreSQL persistence foundation:
 
-- **API** — FastAPI app on port 8000, with volume mount for hot reload
-- **PostgreSQL 16** — relational database on port 5432 (infrastructure only, no models yet)
-- **ChromaDB** — vector database on port 8001 (infrastructure only, no collections yet)
+- **SQLAlchemy 2.0 async** engine and session
+- **Alembic** migrations with initial schema
+- **5 database models**: Document, DocumentChunk, Conversation, Message, LLMRun
+- **`GET /health/db`** endpoint to verify database connectivity
 
-PR 1 scope: FastAPI skeleton, health endpoint, config, tests.
+No document upload, embeddings, or RAG yet.
+
+PR 2: Docker Compose for API, PostgreSQL, ChromaDB.
+PR 1: FastAPI skeleton, health endpoint, config, tests.
 
 ## Planned tech stack
 
@@ -51,13 +55,18 @@ docker compose up --build
 | PostgreSQL | localhost:5432 |
 | ChromaDB | http://localhost:8001 |
 
-> PostgreSQL and ChromaDB are running as infrastructure only in this PR — the API does not connect to them yet.
+Run database migrations (in a second terminal after `docker compose up`):
+
+```bash
+docker compose exec api alembic upgrade head
+```
 
 Test the running API:
 
 ```bash
 curl http://localhost:8000/
 curl http://localhost:8000/health
+curl http://localhost:8000/health/db
 ```
 
 Stop services:
@@ -102,20 +111,40 @@ Interactive docs: `http://localhost:8000/docs`
 pytest
 ```
 
+## Database migrations
+
+```bash
+# Apply all migrations
+alembic upgrade head
+
+# Generate a new migration after changing models
+alembic revision --autogenerate -m "describe the change"
+
+# Roll back one migration
+alembic downgrade -1
+```
+
+Inside Docker:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
 ## Endpoints
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/` | Project info |
-| GET | `/health` | Health check |
+| GET | `/health` | App process health (no DB dependency) |
+| GET | `/health/db` | Database connectivity check |
 
 ## Roadmap
 
 | PR | Scope |
 |---|---|
 | PR 1 | Project skeleton, health endpoint, config |
-| PR 2 (this) | Docker Compose for API, PostgreSQL, ChromaDB |
-| PR 3 | Database models, SQLAlchemy, Alembic migrations |
+| PR 2 | Docker Compose for API, PostgreSQL, ChromaDB |
+| PR 3 (this) | Database models, SQLAlchemy, Alembic migrations |
 | PR 4 | Document upload endpoint, chunking pipeline |
 | PR 5 | Embeddings with sentence-transformers + ChromaDB storage |
 | PR 6 | Ollama integration, RAG query endpoint |
