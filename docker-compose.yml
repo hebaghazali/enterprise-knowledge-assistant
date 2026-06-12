@@ -1,0 +1,49 @@
+services:
+  api:
+    build: .
+    container_name: eka-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://eka_user:eka_password@postgres:5432/eka_db
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+
+  postgres:
+    image: postgres:16
+    container_name: eka-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: eka_user
+      POSTGRES_PASSWORD: eka_password
+      POSTGRES_DB: eka_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eka_user -d eka_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: eka-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+volumes:
+  postgres_data:
+  chroma_data:

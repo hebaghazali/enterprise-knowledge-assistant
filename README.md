@@ -11,18 +11,15 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 1)
+## Current scope (PR 2)
 
-This PR establishes the clean project foundation only:
+Docker Compose local environment with three services:
 
-- FastAPI app skeleton
-- Health endpoint (`GET /health`)
-- Root info endpoint (`GET /`)
-- Settings/config via pydantic-settings
-- Basic test suite
-- pyproject.toml with dependency management
+- **API** — FastAPI app on port 8000, with volume mount for hot reload
+- **PostgreSQL 16** — relational database on port 5432 (infrastructure only, no models yet)
+- **ChromaDB** — vector database on port 8001 (infrastructure only, no collections yet)
 
-No Docker, no database, no LLM, no document upload yet.
+PR 1 scope: FastAPI skeleton, health endpoint, config, tests.
 
 ## Planned tech stack
 
@@ -38,7 +35,39 @@ No Docker, no database, no LLM, no document upload yet.
 | Containerisation | Docker Compose |
 | Testing | pytest + httpx |
 
-## Local setup
+## Local setup (Docker — recommended)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+| Service | URL |
+|---|---|
+| API | http://localhost:8000 |
+| API docs | http://localhost:8000/docs |
+| PostgreSQL | localhost:5432 |
+| ChromaDB | http://localhost:8001 |
+
+> PostgreSQL and ChromaDB are running as infrastructure only in this PR — the API does not connect to them yet.
+
+Test the running API:
+
+```bash
+curl http://localhost:8000/
+curl http://localhost:8000/health
+```
+
+Stop services:
+
+```bash
+docker compose down        # stop containers
+docker compose down -v     # stop and delete volumes
+```
+
+## Local setup (without Docker)
 
 **With pip:**
 
@@ -46,6 +75,7 @@ No Docker, no database, no LLM, no document upload yet.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
+cp .env.example .env
 ```
 
 **With uv (faster):**
@@ -53,15 +83,10 @@ pip install -e ".[dev]"
 ```bash
 uv venv
 uv pip install -e ".[dev]"
-```
-
-Copy the example env file:
-
-```bash
 cp .env.example .env
 ```
 
-## Running the API
+Run the API:
 
 ```bash
 uvicorn app.main:app --reload
@@ -88,8 +113,8 @@ pytest
 
 | PR | Scope |
 |---|---|
-| PR 1 (this) | Project skeleton, health endpoint, config |
-| PR 2 | Docker Compose for API, PostgreSQL, ChromaDB |
+| PR 1 | Project skeleton, health endpoint, config |
+| PR 2 (this) | Docker Compose for API, PostgreSQL, ChromaDB |
 | PR 3 | Database models, SQLAlchemy, Alembic migrations |
 | PR 4 | Document upload endpoint, chunking pipeline |
 | PR 5 | Embeddings with sentence-transformers + ChromaDB storage |
