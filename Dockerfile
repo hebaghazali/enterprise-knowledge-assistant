@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     "sqlalchemy[asyncio]" \
     alembic \
-    "psycopg[binary]"
+    "psycopg[binary]" \
+    python-multipart \
+    pypdf
 
 EXPOSE 8000
 

@@ -11,17 +11,18 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 3)
+## Current scope (PR 4)
 
-PostgreSQL persistence foundation:
+Document upload and text extraction:
 
-- **SQLAlchemy 2.0 async** engine and session
-- **Alembic** migrations with initial schema
-- **5 database models**: Document, DocumentChunk, Conversation, Message, LLMRun
-- **`GET /health/db`** endpoint to verify database connectivity
+- **`POST /documents/upload`** — accepts `.txt`, `.md`, `.pdf`; extracts text; saves file; stores document metadata in PostgreSQL
+- **`GET /documents/{id}`** — retrieve document metadata by UUID
+- **`GET /documents`** — list all uploaded documents
+- File storage under `storage/uploads/`
 
-No document upload, embeddings, or RAG yet.
+This PR extracts raw text and stores document metadata only. Chunking, embeddings, and vector search will be added in later PRs.
 
+PR 3: Database models, SQLAlchemy, Alembic migrations.
 PR 2: Docker Compose for API, PostgreSQL, ChromaDB.
 PR 1: FastAPI skeleton, health endpoint, config, tests.
 
@@ -68,6 +69,43 @@ curl http://localhost:8000/
 curl http://localhost:8000/health
 curl http://localhost:8000/health/db
 ```
+
+## Document upload
+
+Supported file types: `.txt`, `.md`, `.pdf`
+
+Upload a file:
+
+```bash
+curl -X POST http://localhost:8000/documents/upload \
+  -F "file=@path/to/document.txt"
+```
+
+Retrieve a document:
+
+```bash
+curl http://localhost:8000/documents/<document-id>
+```
+
+List all documents:
+
+```bash
+curl http://localhost:8000/documents
+```
+
+Manual validation with Docker:
+
+```bash
+echo "This is a sample company policy document." > sample.txt
+
+curl -X POST http://localhost:8000/documents/upload \
+  -F "file=@sample.txt"
+
+# Use the returned id:
+curl http://localhost:8000/documents/<returned-id>
+```
+
+> The original file is saved under `storage/uploads/` inside the container. Chunking, embeddings, and vector search will be added in later PRs.
 
 Stop services:
 
@@ -137,6 +175,9 @@ docker compose exec api alembic upgrade head
 | GET | `/` | Project info |
 | GET | `/health` | App process health (no DB dependency) |
 | GET | `/health/db` | Database connectivity check |
+| POST | `/documents/upload` | Upload a document (`.txt`, `.md`, `.pdf`) |
+| GET | `/documents/{id}` | Get document metadata by UUID |
+| GET | `/documents` | List all documents |
 
 ## Roadmap
 
@@ -144,8 +185,8 @@ docker compose exec api alembic upgrade head
 |---|---|
 | PR 1 | Project skeleton, health endpoint, config |
 | PR 2 | Docker Compose for API, PostgreSQL, ChromaDB |
-| PR 3 (this) | Database models, SQLAlchemy, Alembic migrations |
-| PR 4 | Document upload endpoint, chunking pipeline |
+| PR 3 | Database models, SQLAlchemy, Alembic migrations |
+| PR 4 (this) | Document upload, text extraction, file storage |
 | PR 5 | Embeddings with sentence-transformers + ChromaDB storage |
 | PR 6 | Ollama integration, RAG query endpoint |
 | PR 7 | Conversation history, session management |
