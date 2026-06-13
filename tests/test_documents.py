@@ -37,13 +37,18 @@ def test_save_upload_file_writes_content(tmp_path):
 
 
 def test_save_upload_file_relative_path_structure(tmp_path):
-    """Returned path is relative to CWD when upload_dir is relative."""
     upload_dir = tmp_path / "uploads"
     path, _ = save_upload_file(b"data", "doc.txt", upload_dir)
-    # path is under upload_dir
     assert path.parent == upload_dir
-    # filename follows <uuid>_<safe_name> pattern
     assert path.name.endswith("_doc.txt")
+
+
+def test_save_upload_file_uses_document_id_as_prefix(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    document_id = uuid.uuid4()
+    path, _ = save_upload_file(b"content", "report.txt", upload_dir, document_id=document_id)
+    assert path.name.startswith(str(document_id))
+    assert path.name == f"{document_id}_report.txt"
 
 
 def test_save_upload_file_sanitises_filename(tmp_path):
@@ -303,6 +308,30 @@ def test_upload_md_success(mock_save):
         assert response.json()["filename"] == "notes.md"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_upload_saved_path_uses_document_id():
+    """The document_id passed to save_upload_file must match the id in the API response."""
+    doc = _make_document("test.txt", ".txt")
+    captured: dict = {}
+
+    def fake_save(content, filename, upload_dir, document_id=None):
+        captured["document_id"] = document_id
+        return (_FAKE_PATH, 41)
+
+    with patch("app.api.routes.documents.save_upload_file", side_effect=fake_save):
+        app.dependency_overrides[get_db_session] = _upload_db_override(doc)
+        try:
+            response = client.post(
+                "/documents/upload",
+                files={"file": ("test.txt", b"some content", "text/plain")},
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert captured["document_id"] is not None
+            assert str(captured["document_id"]) == data["id"]
+        finally:
+            app.dependency_overrides.clear()
 
 
 def test_upload_unsupported_extension():

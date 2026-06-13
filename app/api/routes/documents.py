@@ -41,14 +41,19 @@ async def upload_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    original_filename = file.filename or "upload"
+    document_id = uuid.uuid4()
+
     try:
         upload_dir = Path(get_settings().upload_dir)
-        saved_path, file_size = save_upload_file(content, file.filename or "upload", upload_dir)
+        saved_path, file_size = save_upload_file(
+            content, original_filename, upload_dir, document_id=document_id
+        )
     except OSError as exc:
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.") from exc
 
-    original_filename = file.filename or "upload"
     document = Document(
+        id=document_id,
         filename=original_filename,
         content_type=file.content_type,
         source_type="upload",
