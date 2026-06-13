@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir \
     alembic \
     "psycopg[binary]" \
     python-multipart \
-    pypdf
+    pypdf \
+    transformers
 
 EXPOSE 8000
 

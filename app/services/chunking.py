@@ -1,5 +1,19 @@
+from transformers import AutoTokenizer
+
+# Loaded once at import time; cached in ~/.cache/huggingface after first download.
+_TOKENIZER = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+
+
 def estimate_token_count(text: str) -> int:
-    return len(text.split())
+    """Return the number of tokens produced by the all-MiniLM-L6-v2 WordPiece tokenizer.
+
+    Uses the same tokenizer that will be used for embedding in PR 6, so the
+    count reflects real model token boundaries rather than whitespace splitting.
+    Returns 0 for empty text.
+    """
+    if not text:
+        return 0
+    return len(_TOKENIZER.encode(text, add_special_tokens=False))
 
 
 def chunk_text(

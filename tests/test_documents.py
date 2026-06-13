@@ -133,16 +133,19 @@ def test_chunk_overlap_gte_chunk_size_terminates():
 # ---------------------------------------------------------------------------
 
 
-def test_estimate_token_count_basic():
-    assert estimate_token_count("hello world") == 2
-
-
 def test_estimate_token_count_empty():
     assert estimate_token_count("") == 0
 
 
-def test_estimate_token_count_multiword():
-    assert estimate_token_count("the quick brown fox") == 4
+def test_estimate_token_count_positive():
+    assert estimate_token_count("hello world") > 0
+
+
+def test_estimate_token_count_not_word_split():
+    # "tokenization" is 1 whitespace-word but splits into 2 WordPiece subwords,
+    # proving the real tokenizer is used rather than text.split().
+    text = "tokenization"
+    assert estimate_token_count(text) > len(text.split())
 
 
 # ---------------------------------------------------------------------------
