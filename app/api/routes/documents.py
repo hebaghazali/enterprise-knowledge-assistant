@@ -10,9 +10,12 @@ from app.db.models import Document, DocumentChunk
 from app.db.session import get_db_session
 from app.schemas.chunks import ChunkListResponse, ChunkResponse, ChunkingSummaryResponse
 from app.schemas.documents import DocumentListItem, DocumentResponse
+from app.schemas.indexing import IndexingSummaryResponse
 from app.services.chunking import chunk_text
 from app.services.document_storage import save_upload_file
+from app.services.embeddings import embed_texts
 from app.services.text_extraction import SUPPORTED_EXTENSIONS, extract_text
+from app.services.vector_store import upsert_chunks
 
 router = APIRouter(tags=["documents"])
 
@@ -149,6 +152,84 @@ async def chunk_document(
         chunk_count=len(text_chunks),
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+    )
+
+
+@router.post("/{document_id}/index", response_model=IndexingSummaryResponse)
+async def index_document(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+) -> IndexingSummaryResponse:
+    from datetime import datetime, timezone
+
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    document = result.scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    chunks_result = await db.execute(
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == document_id)
+        .order_by(DocumentChunk.chunk_index.asc())
+    )
+    chunks = chunks_result.scalars().all()
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Document has no chunks. Run POST /chunk first.",
+        )
+
+    settings = get_settings()
+    texts = [chunk.content for chunk in chunks]
+
+    try:
+        embeddings = embed_texts(texts)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
+
+    ids = [str(chunk.id) for chunk in chunks]
+    metadatas = [
+        {
+            "document_id": str(document_id),
+            "chunk_id": str(chunk.id),
+            "chunk_index": chunk.chunk_index,
+            "filename": document.filename,
+            "token_count": chunk.token_count or 0,
+        }
+        for chunk in chunks
+    ]
+
+    try:
+        upsert_chunks(
+            collection_name=settings.chroma_collection_name,
+            ids=ids,
+            documents=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    for chunk in chunks:
+        chunk.chroma_collection = settings.chroma_collection_name
+        chunk.chroma_id = str(chunk.id)
+
+    document.status = "vector_indexed"
+    document.document_metadata = {
+        **(document.document_metadata or {}),
+        "indexed_at": datetime.now(timezone.utc).isoformat(),
+        "embedding_model": settings.embedding_model_name,
+        "chroma_collection": settings.chroma_collection_name,
+    }
+    await db.commit()
+
+    return IndexingSummaryResponse(
+        document_id=document_id,
+        status="vector_indexed",
+        chunk_count=len(chunks),
+        embedding_model=settings.embedding_model_name,
+        chroma_collection=settings.chroma_collection_name,
     )
 
 

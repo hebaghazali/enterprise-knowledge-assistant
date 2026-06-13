@@ -9,6 +9,7 @@ services:
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
       - ./storage:/app/storage
+      - hf_cache:/root/.cache/huggingface
     env_file:
       - path: .env
         required: false
@@ -50,3 +51,4 @@ services:
 volumes:
   postgres_data:
   chroma_data:
+  hf_cache:

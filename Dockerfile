@@ -18,7 +18,9 @@ RUN pip install --no-cache-dir \
     "psycopg[binary]" \
     python-multipart \
     pypdf \
-    transformers
+    transformers \
+    sentence-transformers \
+    chromadb
 
 EXPOSE 8000
 
