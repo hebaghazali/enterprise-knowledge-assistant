@@ -10,7 +10,7 @@ from app.db.models import Document, DocumentChunk
 from app.db.session import get_db_session
 from app.schemas.chunks import ChunkListResponse, ChunkResponse, ChunkingSummaryResponse
 from app.schemas.documents import DocumentListItem, DocumentResponse
-from app.services.chunking import chunk_text, estimate_token_count
+from app.services.chunking import chunk_text
 from app.services.document_storage import save_upload_file
 from app.services.text_extraction import SUPPORTED_EXTENSIONS, extract_text
 
@@ -124,13 +124,13 @@ async def chunk_document(
         )
 
         text_chunks = chunk_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        for index, chunk_content in enumerate(text_chunks):
+        for index, (chunk_content, token_count) in enumerate(text_chunks):
             db.add(
                 DocumentChunk(
                     document_id=document_id,
                     chunk_index=index,
                     content=chunk_content,
-                    token_count=estimate_token_count(chunk_content),
+                    token_count=token_count,
                 )
             )
 

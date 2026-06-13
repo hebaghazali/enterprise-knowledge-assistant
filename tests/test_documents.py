@@ -92,39 +92,50 @@ def test_chunk_whitespace_only():
 
 
 def test_chunk_shorter_than_chunk_size():
-    text = "Hello world"
-    assert chunk_text(text, chunk_size=500, chunk_overlap=50) == ["Hello world"]
+    # "hello world" → 2 BERT tokens; well under chunk_size=500 → 1 chunk
+    result = chunk_text("hello world", chunk_size=500, chunk_overlap=50)
+    assert len(result) == 1
+    text_out, count = result[0]
+    assert count == 2
+    assert "hello" in text_out.lower()
 
 
 def test_chunk_exact_chunk_size():
-    text = "A" * 500
-    result = chunk_text(text, chunk_size=500, chunk_overlap=50)
-    assert result == ["A" * 500]
+    # "hello " * 5 → 5 tokens = chunk_size → 1 chunk (≤ branch)
+    result = chunk_text("hello " * 5, chunk_size=5, chunk_overlap=0)
+    assert len(result) == 1
+    _, count = result[0]
+    assert count == 5
 
 
 def test_chunk_overlap_behavior():
-    # ABCDEFGHIJ with size=5, overlap=2 → step=3
-    # chunks: [0:5]=ABCDE, [3:8]=DEFGH, [6:10]=GHIJ
-    text = "ABCDEFGHIJ"
-    result = chunk_text(text, chunk_size=5, chunk_overlap=2)
-    assert result == ["ABCDE", "DEFGH", "GHIJ"]
+    # "hello " * 9 → 9 tokens; chunk_size=5, overlap=2, step=3
+    # chunk 0: tokens[0:5]  → 5 tokens
+    # chunk 1: tokens[3:8]  → 5 tokens (2-token overlap with chunk 0)
+    # chunk 2: tokens[6:9]  → 3 tokens (2-token overlap with chunk 1)
+    result = chunk_text("hello " * 9, chunk_size=5, chunk_overlap=2)
+    assert len(result) == 3
+    assert result[0][1] == 5
+    assert result[1][1] == 5
+    assert result[2][1] == 3
 
 
 def test_chunk_correct_count_large_text():
-    # 1000 chars, size=500, overlap=50 → step=450
-    # start=0→500, start=450→950, start=900→1000 → 3 chunks
-    text = "A" * 1000
-    result = chunk_text(text, chunk_size=500, chunk_overlap=50)
+    # "hello " * 200 → 200 tokens; chunk_size=100, overlap=10, step=90
+    # chunk 0: tokens[0:100]   → 100 tokens, next start=90
+    # chunk 1: tokens[90:190]  → 100 tokens, next start=180
+    # chunk 2: tokens[180:200] →  20 tokens → 3 chunks
+    result = chunk_text("hello " * 200, chunk_size=100, chunk_overlap=10)
     assert len(result) == 3
-    assert len(result[0]) == 500
-    assert len(result[1]) == 500
-    assert len(result[2]) == 100
+    assert result[0][1] == 100
+    assert result[1][1] == 100
+    assert result[2][1] == 20
 
 
 def test_chunk_overlap_gte_chunk_size_terminates():
-    # overlap >= chunk_size must not loop forever; step is clamped to 1
-    text = "Hello world"
-    result = chunk_text(text, chunk_size=3, chunk_overlap=10)
+    # step is clamped to max(1, chunk_size - chunk_overlap) = 1;
+    # loop still terminates even when overlap > chunk_size.
+    result = chunk_text("hello " * 10, chunk_size=3, chunk_overlap=10)
     assert len(result) > 0
 
 
@@ -422,7 +433,10 @@ def test_chunk_invalid_overlap_exceeds_chunk_size():
 
 
 def test_chunk_document_success(tmp_path):
-    content = b"A" * 600  # 2 chunks: [0:500], [450:600]
+    # "hello " * 100 → 100 tokens; chunk_size=60, overlap=10, step=50
+    # chunk 0: tokens[0:60]  → 60 tokens, next start=50
+    # chunk 1: tokens[50:100] → 50 tokens → 2 chunks
+    content = b"hello " * 100
     file_path = tmp_path / "test.txt"
     file_path.write_bytes(content)
 
@@ -431,20 +445,26 @@ def test_chunk_document_success(tmp_path):
 
     app.dependency_overrides[get_db_session] = _chunk_db_override(doc)
     try:
-        response = client.post(f"/documents/{doc.id}/chunk")
+        response = client.post(
+            f"/documents/{doc.id}/chunk",
+            params={"chunk_size": 60, "chunk_overlap": 10},
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "indexed"
         assert data["chunk_count"] == 2
-        assert data["chunk_size"] == 500
-        assert data["chunk_overlap"] == 50
+        assert data["chunk_size"] == 60
+        assert data["chunk_overlap"] == 10
         assert data["document_id"] == str(doc.id)
     finally:
         app.dependency_overrides.clear()
 
 
 def test_chunk_document_custom_params(tmp_path):
-    content = b"B" * 200
+    # "hello " * 30 → 30 tokens; chunk_size=20, overlap=5, step=15
+    # chunk 0: tokens[0:20]  → 20 tokens, next start=15
+    # chunk 1: tokens[15:30] → 15 tokens → 2 chunks
+    content = b"hello " * 30
     file_path = tmp_path / "doc.txt"
     file_path.write_bytes(content)
 
@@ -455,14 +475,13 @@ def test_chunk_document_custom_params(tmp_path):
     try:
         response = client.post(
             f"/documents/{doc.id}/chunk",
-            params={"chunk_size": 100, "chunk_overlap": 10},
+            params={"chunk_size": 20, "chunk_overlap": 5},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["chunk_size"] == 100
-        assert data["chunk_overlap"] == 10
-        # 200 chars, size=100, overlap=10, step=90 → chunks at 0, 90, 180 → 3 chunks
-        assert data["chunk_count"] == 3
+        assert data["chunk_size"] == 20
+        assert data["chunk_overlap"] == 5
+        assert data["chunk_count"] == 2
     finally:
         app.dependency_overrides.clear()
 
