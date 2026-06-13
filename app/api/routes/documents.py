@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.models import Document
 from app.db.session import get_db_session
 from app.schemas.documents import DocumentListItem, DocumentResponse
@@ -39,7 +40,8 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        saved_path, file_size = save_upload_file(content, file.filename or "upload")
+        upload_dir = Path(get_settings().upload_dir)
+        saved_path, file_size = save_upload_file(content, file.filename or "upload", upload_dir)
     except OSError as exc:
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.") from exc
 

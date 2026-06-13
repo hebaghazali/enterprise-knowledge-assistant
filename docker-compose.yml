@@ -8,6 +8,7 @@ services:
       - ./app:/app/app
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
+      - ./storage:/app/storage
     env_file:
       - path: .env
         required: false

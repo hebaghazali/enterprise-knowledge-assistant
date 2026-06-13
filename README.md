@@ -105,7 +105,7 @@ curl -X POST http://localhost:8000/documents/upload \
 curl http://localhost:8000/documents/<returned-id>
 ```
 
-> The original file is saved under `storage/uploads/` inside the container. Chunking, embeddings, and vector search will be added in later PRs.
+> The original file is saved under `storage/uploads/` on the host (mounted into the container at `/app/storage/uploads`). Chunking, embeddings, and vector search will be added in later PRs.
 
 Stop services:
 

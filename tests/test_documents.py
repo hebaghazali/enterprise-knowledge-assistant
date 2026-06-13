@@ -9,9 +9,49 @@ from fastapi.testclient import TestClient
 from app.db.models import Document
 from app.db.session import get_db_session
 from app.main import app
+from app.services.document_storage import save_upload_file
 from app.services.text_extraction import extract_text
 
 client = TestClient(app)
+
+# ---------------------------------------------------------------------------
+# save_upload_file — unit tests using a temp directory
+# ---------------------------------------------------------------------------
+
+
+def test_save_upload_file_creates_directory(tmp_path):
+    upload_dir = tmp_path / "storage" / "uploads"
+    assert not upload_dir.exists()
+    save_upload_file(b"hello", "test.txt", upload_dir)
+    assert upload_dir.is_dir()
+
+
+def test_save_upload_file_writes_content(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    content = b"Company policy document."
+    path, size = save_upload_file(content, "policy.txt", upload_dir)
+    assert path.exists()
+    assert path.read_bytes() == content
+    assert size == len(content)
+
+
+def test_save_upload_file_relative_path_structure(tmp_path):
+    """Returned path is relative to CWD when upload_dir is relative."""
+    upload_dir = tmp_path / "uploads"
+    path, _ = save_upload_file(b"data", "doc.txt", upload_dir)
+    # path is under upload_dir
+    assert path.parent == upload_dir
+    # filename follows <uuid>_<safe_name> pattern
+    assert path.name.endswith("_doc.txt")
+
+
+def test_save_upload_file_sanitises_filename(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    path, _ = save_upload_file(b"x", "my file (1).txt", upload_dir)
+    assert " " not in path.name
+    assert "(" not in path.name
+    assert ")" not in path.name
+
 
 # ---------------------------------------------------------------------------
 # Text extraction — pure unit tests, no mocking needed
