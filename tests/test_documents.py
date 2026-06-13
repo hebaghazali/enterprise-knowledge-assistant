@@ -388,6 +388,39 @@ def test_get_document_not_found():
 # ---------------------------------------------------------------------------
 
 
+def test_chunk_invalid_chunk_size_zero():
+    response = client.post(f"/documents/{uuid.uuid4()}/chunk", params={"chunk_size": 0})
+    assert response.status_code == 422
+
+
+def test_chunk_invalid_chunk_size_negative():
+    response = client.post(f"/documents/{uuid.uuid4()}/chunk", params={"chunk_size": -1})
+    assert response.status_code == 422
+
+
+def test_chunk_invalid_chunk_overlap_negative():
+    response = client.post(f"/documents/{uuid.uuid4()}/chunk", params={"chunk_overlap": -1})
+    assert response.status_code == 422
+
+
+def test_chunk_invalid_overlap_equals_chunk_size():
+    response = client.post(
+        f"/documents/{uuid.uuid4()}/chunk",
+        params={"chunk_size": 500, "chunk_overlap": 500},
+    )
+    assert response.status_code == 422
+    assert "chunk_overlap" in response.json()["detail"]
+
+
+def test_chunk_invalid_overlap_exceeds_chunk_size():
+    response = client.post(
+        f"/documents/{uuid.uuid4()}/chunk",
+        params={"chunk_size": 500, "chunk_overlap": 600},
+    )
+    assert response.status_code == 422
+    assert "chunk_overlap" in response.json()["detail"]
+
+
 def test_chunk_document_success(tmp_path):
     content = b"A" * 600  # 2 chunks: [0:500], [450:600]
     file_path = tmp_path / "test.txt"

@@ -23,7 +23,22 @@ def chunk_text(
 ) -> list[str]:
     """Split text into overlapping character-based chunks.
 
-    Example: text="ABCDEFGHIJ", chunk_size=5, chunk_overlap=2
+    Chunking is CHARACTER-based: chunk_size and chunk_overlap are measured in
+    characters, not words or tokenizer tokens. Character boundaries are simple
+    and require no tokenizer overhead during splitting.
+
+    Token counts are measured separately after each chunk is created, using the
+    all-MiniLM-L6-v2 WordPiece tokenizer (see estimate_token_count). A 500-char
+    chunk of English prose typically contains 80–120 tokens; the two units are
+    independent and do not influence each other.
+
+    Future improvement: switch to token-based chunking using the same tokenizer
+    so chunk_size directly controls the token budget fed to the embedding model.
+
+    The caller is responsible for validating chunk_size > 0, chunk_overlap >= 0,
+    and chunk_overlap < chunk_size before calling this function.
+
+    Example: text="ABCDEFGHIJ", chunk_size=5, chunk_overlap=2  (step=3)
     → ["ABCDE", "DEFGH", "GHIJ"]
     """
     if not text.strip():

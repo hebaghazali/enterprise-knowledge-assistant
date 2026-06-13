@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,9 +78,18 @@ async def upload_document(
 async def chunk_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    chunk_size: int = 500,
-    chunk_overlap: int = 50,
+    chunk_size: int = Query(default=500, gt=0),
+    chunk_overlap: int = Query(default=50, ge=0),
 ) -> ChunkingSummaryResponse:
+    if chunk_overlap >= chunk_size:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"chunk_overlap ({chunk_overlap}) must be less than "
+                f"chunk_size ({chunk_size})."
+            ),
+        )
+
     result = await db.execute(select(Document).where(Document.id == document_id))
     document = result.scalar_one_or_none()
     if document is None:
