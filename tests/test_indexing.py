@@ -253,6 +253,8 @@ def test_index_document_success(mock_embed, mock_upsert):
         data = response.json()
         assert data["status"] == "vector_indexed"
         assert data["chunk_count"] == 2
+        assert data["indexed_chunk_count"] == 2
+        assert data["skipped_chunk_count"] == 0
         assert data["embedding_model"] == "sentence-transformers/all-MiniLM-L6-v2"
         assert data["chroma_collection"] == "enterprise_knowledge_chunks"
         assert data["document_id"] == str(doc.id)
@@ -322,20 +324,96 @@ def test_index_document_chroma_unavailable(mock_upsert, mock_embed):
 @patch("app.api.routes.documents.upsert_chunks")
 @patch("app.api.routes.documents.embed_texts", return_value=_FAKE_EMBEDDINGS)
 def test_index_document_idempotent(mock_embed, mock_upsert):
-    """Calling index twice uses the same chunk UUIDs → Chroma upsert is idempotent."""
+    """First call indexes all chunks; second call skips all (chroma_id already set)."""
     doc = _make_doc()
     chunks = [
         _make_chunk(doc.id, 0, "hello world"),
         _make_chunk(doc.id, 1, "foo bar baz"),
     ]
-    fixed_ids = [str(c.id) for c in chunks]
 
-    for _ in range(2):
-        app.dependency_overrides[get_db_session] = _index_db_override(doc, chunks)
-        try:
-            response = client.post(f"/documents/{doc.id}/index")
-            assert response.status_code == 200
-            call_ids = mock_upsert.call_args.kwargs["ids"]
-            assert call_ids == fixed_ids
-        finally:
-            app.dependency_overrides.clear()
+    # First call — all chunks are new.
+    app.dependency_overrides[get_db_session] = _index_db_override(doc, chunks)
+    try:
+        response = client.post(f"/documents/{doc.id}/index")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["indexed_chunk_count"] == 2
+        assert data["skipped_chunk_count"] == 0
+        mock_embed.assert_called_once()
+        mock_upsert.assert_called_once()
+    finally:
+        app.dependency_overrides.clear()
+
+    mock_embed.reset_mock()
+    mock_upsert.reset_mock()
+
+    # Second call — chunks now have chroma_id set (mutated in-place by first call).
+    app.dependency_overrides[get_db_session] = _index_db_override(doc, chunks)
+    try:
+        response = client.post(f"/documents/{doc.id}/index")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "vector_indexed"
+        assert data["indexed_chunk_count"] == 0
+        assert data["skipped_chunk_count"] == 2
+        mock_embed.assert_not_called()
+        mock_upsert.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.documents.upsert_chunks")
+@patch("app.api.routes.documents.embed_texts")
+def test_index_document_all_skipped(mock_embed, mock_upsert):
+    """All chunks already indexed → embed and upsert not called; status still vector_indexed."""
+    doc = _make_doc()
+    chunks = [
+        _make_chunk(doc.id, 0, "hello world"),
+        _make_chunk(doc.id, 1, "foo bar baz"),
+    ]
+    for chunk in chunks:
+        chunk.chroma_id = str(chunk.id)
+        chunk.chroma_collection = "enterprise_knowledge_chunks"
+
+    app.dependency_overrides[get_db_session] = _index_db_override(doc, chunks)
+    try:
+        response = client.post(f"/documents/{doc.id}/index")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "vector_indexed"
+        assert data["chunk_count"] == 2
+        assert data["indexed_chunk_count"] == 0
+        assert data["skipped_chunk_count"] == 2
+        mock_embed.assert_not_called()
+        mock_upsert.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.documents.upsert_chunks")
+@patch("app.api.routes.documents.embed_texts", return_value=[[0.1] * 384])
+def test_index_document_partial(mock_embed, mock_upsert):
+    """One chunk already indexed, one new → only the new chunk is embedded and upserted."""
+    doc = _make_doc()
+    chunk_already = _make_chunk(doc.id, 0, "already indexed")
+    chunk_already.chroma_id = str(chunk_already.id)
+    chunk_already.chroma_collection = "enterprise_knowledge_chunks"
+
+    chunk_new = _make_chunk(doc.id, 1, "needs indexing")
+
+    chunks = [chunk_already, chunk_new]
+
+    app.dependency_overrides[get_db_session] = _index_db_override(doc, chunks)
+    try:
+        response = client.post(f"/documents/{doc.id}/index")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "vector_indexed"
+        assert data["chunk_count"] == 2
+        assert data["indexed_chunk_count"] == 1
+        assert data["skipped_chunk_count"] == 1
+        mock_embed.assert_called_once_with(["needs indexing"])
+        call_kwargs = mock_upsert.call_args.kwargs
+        assert call_kwargs["ids"] == [str(chunk_new.id)]
+    finally:
+        app.dependency_overrides.clear()

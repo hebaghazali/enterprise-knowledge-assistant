@@ -181,39 +181,47 @@ async def index_document(
         )
 
     settings = get_settings()
-    texts = [chunk.content for chunk in chunks]
 
-    try:
-        embeddings = embed_texts(texts)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
-
-    ids = [str(chunk.id) for chunk in chunks]
-    metadatas = [
-        {
-            "document_id": str(document_id),
-            "chunk_id": str(chunk.id),
-            "chunk_index": chunk.chunk_index,
-            "filename": document.filename,
-            "token_count": chunk.token_count or 0,
-        }
-        for chunk in chunks
+    new_chunks = [
+        c for c in chunks
+        if c.chroma_id is None or c.chroma_collection != settings.chroma_collection_name
     ]
+    skipped_count = len(chunks) - len(new_chunks)
 
-    try:
-        upsert_chunks(
-            collection_name=settings.chroma_collection_name,
-            ids=ids,
-            documents=texts,
-            embeddings=embeddings,
-            metadatas=metadatas,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if new_chunks:
+        texts = [chunk.content for chunk in new_chunks]
 
-    for chunk in chunks:
-        chunk.chroma_collection = settings.chroma_collection_name
-        chunk.chroma_id = str(chunk.id)
+        try:
+            embeddings = embed_texts(texts)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
+
+        ids = [str(chunk.id) for chunk in new_chunks]
+        metadatas = [
+            {
+                "document_id": str(document_id),
+                "chunk_id": str(chunk.id),
+                "chunk_index": chunk.chunk_index,
+                "filename": document.filename,
+                "token_count": chunk.token_count or 0,
+            }
+            for chunk in new_chunks
+        ]
+
+        try:
+            upsert_chunks(
+                collection_name=settings.chroma_collection_name,
+                ids=ids,
+                documents=texts,
+                embeddings=embeddings,
+                metadatas=metadatas,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        for chunk in new_chunks:
+            chunk.chroma_collection = settings.chroma_collection_name
+            chunk.chroma_id = str(chunk.id)
 
     document.status = "vector_indexed"
     document.document_metadata = {
@@ -228,6 +236,8 @@ async def index_document(
         document_id=document_id,
         status="vector_indexed",
         chunk_count=len(chunks),
+        indexed_chunk_count=len(new_chunks),
+        skipped_chunk_count=skipped_count,
         embedding_model=settings.embedding_model_name,
         chroma_collection=settings.chroma_collection_name,
     )
