@@ -2,25 +2,18 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install dependencies first so this layer is cached independently of app code changes
+COPY requirements.txt .
+RUN pip install --upgrade pip --no-cache-dir && \
+    pip install --no-cache-dir \
+        --timeout 120 \
+        --retries 5 \
+        -r requirements.txt
+
 COPY pyproject.toml .
 COPY app/ app/
 COPY alembic/ alembic/
 COPY alembic.ini .
-
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    pydantic \
-    pydantic-settings \
-    python-dotenv \
-    "sqlalchemy[asyncio]" \
-    alembic \
-    "psycopg[binary]" \
-    python-multipart \
-    pypdf \
-    transformers \
-    sentence-transformers \
-    chromadb
 
 EXPOSE 8000
 

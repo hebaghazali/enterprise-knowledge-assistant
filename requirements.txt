@@ -1,0 +1,27 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# Config & validation
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-dotenv>=1.0.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.0
+alembic>=1.13.0
+psycopg[binary]>=3.1.0
+
+# File handling
+python-multipart>=0.0.9
+pypdf>=4.0.0
+
+# Vector store
+chromadb>=0.5.0
+
+# ML / embeddings — CPU-only torch; +cpu suffix is resolved via the extra index above
+torch==2.4.1+cpu
+transformers>=4.40.0
+sentence-transformers>=2.7.0
