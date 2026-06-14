@@ -20,7 +20,7 @@ _NOW = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
 # ---------------------------------------------------------------------------
 
 
-def _make_doc(status: str = "indexed") -> Document:
+def _make_doc(status: str = "chunked") -> Document:
     doc = Document(
         filename="test.txt",
         content_type="text/plain",

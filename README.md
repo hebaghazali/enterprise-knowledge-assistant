@@ -151,7 +151,7 @@ FROM document_chunks
 ORDER BY chunk_index;
 ```
 
-Expected after chunking: `status = indexed`, `chunk_count > 0`.
+Expected after chunking: `status = chunked`, `chunk_count > 0`.
 
 Stop services:
 

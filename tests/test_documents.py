@@ -451,7 +451,7 @@ def test_chunk_document_success(tmp_path):
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "indexed"
+        assert data["status"] == "chunked"
         assert data["chunk_count"] == 2
         assert data["chunk_size"] == 60
         assert data["chunk_overlap"] == 10
@@ -493,7 +493,7 @@ def test_chunk_document_rechunking_replaces_old_chunks(tmp_path):
 
     doc = _make_document("rechunk.txt", ".txt")
     doc.document_metadata = {**doc.document_metadata, "saved_path": str(file_path)}
-    doc.status = "indexed"
+    doc.status = "chunked"
     doc.chunk_count = 99  # stale value — should be replaced
 
     app.dependency_overrides[get_db_session] = _chunk_db_override(doc)
@@ -501,7 +501,7 @@ def test_chunk_document_rechunking_replaces_old_chunks(tmp_path):
         response = client.post(f"/documents/{doc.id}/chunk")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "indexed"
+        assert data["status"] == "chunked"
         assert data["chunk_count"] != 99
     finally:
         app.dependency_overrides.clear()

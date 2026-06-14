@@ -137,7 +137,7 @@ async def chunk_document(
                 )
             )
 
-        document.status = "indexed"
+        document.status = "chunked"
         document.chunk_count = len(text_chunks)
         await db.commit()
 
@@ -148,7 +148,7 @@ async def chunk_document(
 
     return ChunkingSummaryResponse(
         document_id=document_id,
-        status="indexed",
+        status="chunked",
         chunk_count=len(text_chunks),
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
