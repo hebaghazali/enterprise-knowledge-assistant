@@ -214,6 +214,50 @@ Inside Docker:
 docker compose exec api alembic upgrade head
 ```
 
+## Semantic Retrieval
+
+User questions are converted into embeddings and matched against vectorized chunks stored in ChromaDB.
+
+```bash
+curl "http://localhost:8000/search?q=password+rules&k=3"
+```
+
+Flow:
+
+```
+Question
+↓
+Embedding (sentence-transformers/all-MiniLM-L6-v2)
+↓
+Vector Search (ChromaDB cosine similarity)
+↓
+Top-K Chunks
+```
+
+Example response:
+
+```json
+{
+  "query": "password rules",
+  "results": [
+    {
+      "chunk_id": "...",
+      "document_id": "...",
+      "filename": "policy.txt",
+      "chunk_index": 2,
+      "content": "Employees must follow password security rules...",
+      "token_count": 87,
+      "similarity_score": 0.8333
+    }
+  ],
+  "result_count": 1
+}
+```
+
+Similarity scores use `1 / (1 + distance)` — range [0, 1], higher means more similar.
+
+This PR implements retrieval only. It does NOT generate answers.
+
 ## Endpoints
 
 | Method | Path | Description |
@@ -226,6 +270,7 @@ docker compose exec api alembic upgrade head
 | GET | `/documents/{id}/chunks` | List chunks with previews and token counts |
 | GET | `/documents/{id}` | Get document metadata by UUID |
 | GET | `/documents` | List all documents |
+| GET | `/search?q=...&k=5` | Semantic search across all indexed chunks |
 
 ## Roadmap
 
