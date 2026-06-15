@@ -1,0 +1,149 @@
+NOVATECH SOLUTIONS
+PRODUCT & OPERATIONS KNOWLEDGE BASE
+Version 2026
+
+================================================================================
+PRODUCT CATALOG
+================================================================================
+
+NovaAnalytics
+A cloud-based reporting and business intelligence platform.
+
+Features:
+- Interactive dashboards
+- Scheduled reports
+- CSV, Excel, and PDF exports
+- Role-based permissions
+- Audit logs
+
+NovaFlow
+A workflow automation platform.
+
+Features:
+- Approval chains
+- Integrations with Slack and Microsoft Teams
+- Webhooks
+- Conditional workflows
+
+================================================================================
+ENTERPRISE CUSTOMER TIERS
+================================================================================
+
+Starter:
+- Up to 50 users
+- Email support
+- 99.5% uptime SLA
+
+Professional:
+- Up to 500 users
+- Priority support
+- 99.9% uptime SLA
+- Dedicated Customer Success Manager
+
+Enterprise:
+- Unlimited users
+- 24/7 support
+- Technical Account Manager
+- Quarterly business reviews
+- Custom integrations
+
+================================================================================
+PRICING APPROVAL POLICY
+================================================================================
+
+Discounts up to 10%:
+Sales Manager approval.
+
+Discounts between 11% and 20%:
+Regional Director approval.
+
+Discounts above 20%:
+VP of Sales approval.
+
+================================================================================
+BUSINESS CONTINUITY PLAN
+================================================================================
+
+Recovery Time Objective (RTO):
+4 hours.
+
+Recovery Point Objective (RPO):
+15 minutes.
+
+Backups:
+- Database snapshots every 6 hours.
+- Daily offsite backups.
+- Monthly disaster recovery tests.
+
+================================================================================
+DATA TEAM STANDARDS
+================================================================================
+
+Dashboards must:
+- Include metric definitions.
+- Display refresh timestamps.
+- Identify data owners.
+- Document calculation logic.
+
+================================================================================
+CUSTOMER ESCALATION MATRIX
+================================================================================
+
+Severity 1:
+Executive leadership notified immediately.
+
+Severity 2:
+Customer Success Director notified.
+
+Severity 3:
+Support Manager notified.
+
+Severity 4:
+Handled within standard queues.
+
+================================================================================
+MARKETING GUIDELINES
+================================================================================
+
+Approved brand colors:
+- Midnight Blue
+- Silver
+- White
+
+Social media responses should occur within 24 business hours.
+
+================================================================================
+VENDOR MANAGEMENT
+================================================================================
+
+All new vendors require:
+- Security review
+- Legal review
+- Procurement approval
+
+Contracts above $100,000 require CFO approval.
+
+================================================================================
+OFFICE OPERATIONS
+================================================================================
+
+Visitors must:
+- Sign in at reception.
+- Wear visitor badges.
+- Be escorted in secure areas.
+
+================================================================================
+FREQUENTLY ASKED QUESTIONS
+================================================================================
+
+Q: What is the RTO target?
+A: 4 hours.
+
+Q: How often are disaster recovery tests performed?
+A: Monthly.
+
+Q: Which customer tier receives quarterly business reviews?
+A: Enterprise customers.
+
+Q: Who approves discounts above 20%?
+A: The VP of Sales.
