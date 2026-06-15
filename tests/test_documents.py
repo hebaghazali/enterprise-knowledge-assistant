@@ -160,6 +160,52 @@ def test_estimate_token_count_not_word_split():
 
 
 # ---------------------------------------------------------------------------
+# chunk_text — content quality tests
+# ---------------------------------------------------------------------------
+
+
+def test_chunk_content_no_spaced_separator_artifacts():
+    """Token-decode artifacts like '= = =' must never appear in chunk content."""
+    text = "====================\nREMOTE WORK POLICY\n====================\n\nEmployees may work remotely."
+    result = chunk_text(text, chunk_size=500)
+    assert len(result) == 1
+    content = result[0][0]
+    # No space-separated = characters (old decode artifact)
+    assert "= =" not in content
+    # Long separator lines are cleaned away
+    assert "====" not in content
+
+
+def test_chunk_content_preserves_headings():
+    """Section headings must be preserved as-is, including original casing."""
+    text = "REMOTE WORK POLICY\n\nEmployees may work remotely up to three days per week."
+    result = chunk_text(text, chunk_size=500)
+    assert len(result) == 1
+    assert "REMOTE WORK POLICY" in result[0][0]
+
+
+def test_chunk_content_preserves_punctuation():
+    """Punctuation like '10:00 AM' must not have spaces inserted around it."""
+    text = "Meeting at 10:00 AM - all staff required."
+    result = chunk_text(text, chunk_size=500)
+    assert len(result) == 1
+    content = result[0][0]
+    assert "10:00 AM" in content
+    assert "10 : 00" not in content
+
+
+def test_chunk_content_separator_lines_removed():
+    """Lines consisting purely of separator characters (4+) are removed."""
+    text = "Section Title\n========================================\nSome content here."
+    result = chunk_text(text, chunk_size=500)
+    assert len(result) == 1
+    content = result[0][0]
+    assert "Section Title" in content
+    assert "Some content here" in content
+    assert "====" not in content
+
+
+# ---------------------------------------------------------------------------
 # Helpers for endpoint tests
 # ---------------------------------------------------------------------------
 
