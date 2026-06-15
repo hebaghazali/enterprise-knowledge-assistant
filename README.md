@@ -227,7 +227,9 @@ Flow:
 ```
 Question
 ↓
-Embedding (sentence-transformers/all-MiniLM-L6-v2)
+Token-length check (≤ 512 tokens — rejects very long pasted prompts with 422)
+↓
+Embedding (sentence-transformers/all-MiniLM-L6-v2) — query embedded as a single vector
 ↓
 Vector Search (ChromaDB cosine similarity)
 ↓
@@ -255,6 +257,8 @@ Example response:
 ```
 
 Similarity scores use `1 / (1 + distance)` — range [0, 1], higher means more similar.
+
+**Query length limit:** Queries are embedded directly as a single vector. The MVP intentionally rejects very long pasted prompts (default maximum: 512 tokens) with a `422` error rather than silently truncating or chunking them. The limit is configurable via `MAX_QUERY_TOKENS` in `.env`. Future versions may support query decomposition or multi-query retrieval for longer inputs.
 
 This PR implements retrieval only. It does NOT generate answers.
 

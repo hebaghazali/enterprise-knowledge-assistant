@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     chroma_collection_name: str = "enterprise_knowledge_chunks"
     upload_dir: str = "storage/uploads"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    max_query_tokens: int = 512
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

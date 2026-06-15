@@ -134,6 +134,45 @@ def test_retrieve_similarity_score_bounded():
 # ---------------------------------------------------------------------------
 
 
+@patch("app.api.routes.search.count_query_tokens", return_value=10)
+@patch("app.api.routes.search.retrieve")
+def test_search_normal_query_under_limit(mock_retrieve, mock_count):
+    from app.schemas.retrieval import SearchResultResponse
+
+    mock_retrieve.return_value = [
+        SearchResultResponse(
+            chunk_id="c1",
+            document_id="d1",
+            filename="f.txt",
+            chunk_index=0,
+            content="text",
+            token_count=10,
+            similarity_score=0.9,
+        )
+    ]
+    response = client.get("/search?q=what+are+the+password+rules")
+    assert response.status_code == 200
+    mock_retrieve.assert_called_once()
+
+
+@patch("app.api.routes.search.count_query_tokens", return_value=513)
+@patch("app.api.routes.search.retrieve", return_value=[])
+def test_search_long_query_returns_422(mock_retrieve, mock_count):
+    long_query = "word " * 600
+    response = client.get(f"/search?q={long_query}")
+    assert response.status_code == 422
+    assert "too long" in response.json()["detail"].lower()
+    assert "512" in response.json()["detail"]
+
+
+@patch("app.api.routes.search.count_query_tokens", return_value=513)
+@patch("app.api.routes.search.retrieve", return_value=[])
+def test_search_embedding_not_called_for_long_query(mock_retrieve, mock_count):
+    long_query = "word " * 600
+    client.get(f"/search?q={long_query}")
+    mock_retrieve.assert_not_called()
+
+
 @patch("app.api.routes.search.retrieve", return_value=[])
 def test_search_empty_query(mock_retrieve):
     response = client.get("/search?q=")

@@ -4,6 +4,11 @@ from transformers import AutoTokenizer
 _TOKENIZER = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
 
 
+def count_query_tokens(query: str) -> int:
+    """Return the token count for a search query using the all-MiniLM-L6-v2 tokenizer."""
+    return estimate_token_count(query)
+
+
 def estimate_token_count(text: str) -> int:
     """Return the number of tokens produced by the all-MiniLM-L6-v2 WordPiece tokenizer.
 

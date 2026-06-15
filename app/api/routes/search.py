@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 
+from app.core.config import get_settings
 from app.schemas.retrieval import SearchResponse
+from app.services.chunking import count_query_tokens
 from app.services.retrieval import retrieve
 
 router = APIRouter(tags=["search"])
@@ -13,6 +15,14 @@ def search(
 ) -> SearchResponse:
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query must not be empty or whitespace.")
+
+    settings = get_settings()
+    token_count = count_query_tokens(q)
+    if token_count > settings.max_query_tokens:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Query is too long. Maximum allowed query length is {settings.max_query_tokens} tokens.",
+        )
 
     try:
         results = retrieve(q, k)
