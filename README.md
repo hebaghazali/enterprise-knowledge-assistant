@@ -11,19 +11,17 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 5)
+## Current scope (PR 8)
 
-Document chunking and PostgreSQL persistence:
+Single-turn grounded answer generation via Ollama:
 
-- **`POST /documents/upload`** — accepts `.txt`, `.md`, `.pdf`; extracts text; saves file; stores document metadata in PostgreSQL
-- **`POST /documents/{id}/chunk`** — splits extracted text into overlapping chunks and persists them in `document_chunks`; idempotent (re-chunking replaces existing chunks)
-- **`GET /documents/{id}/chunks`** — list all chunks for a document with previews and token counts
-- **`GET /documents/{id}`** — retrieve document metadata by UUID
-- **`GET /documents`** — list all uploaded documents
-- File storage under `storage/uploads/`
+- **`POST /answer`** — accepts a question, retrieves top-k relevant chunks, builds a grounded prompt, calls a local Ollama model, returns the answer with source citations
+- Every answer request is logged in the `llm_runs` table (provider, model, prompt, response, latency, status)
+- All previous endpoints remain unchanged
 
-This PR prepares documents for future embedding generation and vector indexing. Embeddings and ChromaDB storage will be added in PR 6.
-
+PR 7: Semantic retrieval with `GET /search`, vector indexing with ChromaDB.
+PR 6: Embeddings with sentence-transformers + ChromaDB storage.
+PR 5: Text chunking, chunk persistence in PostgreSQL.
 PR 4: Document upload, text extraction, file storage.
 PR 3: Database models, SQLAlchemy, Alembic migrations.
 PR 2: Docker Compose for API, PostgreSQL, ChromaDB.
@@ -214,6 +212,76 @@ Inside Docker:
 docker compose exec api alembic upgrade head
 ```
 
+## Grounded Answer Generation
+
+The `/answer` endpoint retrieves relevant chunks and sends them as context to a local Ollama model. The model is instructed to answer only using retrieved context and to say "I don't know based on the provided documents." when the answer is not present.
+
+### Prerequisites
+
+Install and start Ollama:
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+```
+
+For a lighter model (less RAM, slightly lower quality):
+
+```bash
+ollama pull llama3.2:3b
+```
+
+Then set `OLLAMA_MODEL=llama3.2:3b` in `.env`.
+
+### Example
+
+```bash
+curl -X POST http://localhost:8000/answer \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"How many remote days per week are employees allowed?\",\"k\":5}"
+```
+
+Expected response:
+
+```json
+{
+  "question": "How many remote days per week are employees allowed?",
+  "answer": "Employees may work remotely up to three days per week.",
+  "sources": [
+    {
+      "chunk_id": "...",
+      "document_id": "...",
+      "filename": "novatech_enterprise_handbook.txt",
+      "chunk_index": 1,
+      "similarity_score": 0.8421,
+      "content_preview": "REMOTE WORK POLICY\n\nEmployees may work remotely up to three days per week..."
+    }
+  ],
+  "model": "llama3.1:8b",
+  "k": 5
+}
+```
+
+### Notes
+
+- This is **single-turn Q&A only** — no conversation history.
+- **Streaming is not implemented** — the full answer is returned in one response.
+- Answers are **grounded in retrieved chunks** — the model is blocked from inventing facts.
+- Every request is logged in the `llm_runs` table for observability.
+- Conversation history will be added in a later PR.
+
+### Docker note
+
+When running via Docker Compose, Ollama must be running on the host machine. The API container is pre-configured to reach it at `http://host.docker.internal:11434`.
+
+### Verify LLM run logging
+
+```sql
+SELECT provider, model_name, status, latency_ms, created_at
+FROM llm_runs
+ORDER BY created_at DESC;
+```
+
 ## Semantic Retrieval
 
 User questions are converted into embeddings and matched against vectorized chunks stored in ChromaDB.
@@ -275,6 +343,7 @@ This PR implements retrieval only. It does NOT generate answers.
 | GET | `/documents/{id}` | Get document metadata by UUID |
 | GET | `/documents` | List all documents |
 | GET | `/search?q=...&k=5` | Semantic search across all indexed chunks |
+| POST | `/answer` | Ask a question — returns grounded answer + sources |
 
 ## Roadmap
 
@@ -284,8 +353,8 @@ This PR implements retrieval only. It does NOT generate answers.
 | PR 2 | Docker Compose for API, PostgreSQL, ChromaDB |
 | PR 3 | Database models, SQLAlchemy, Alembic migrations |
 | PR 4 | Document upload, text extraction, file storage |
-| PR 5 (this) | Text chunking, chunk persistence in PostgreSQL |
+| PR 5 | Text chunking, chunk persistence in PostgreSQL |
 | PR 6 | Embeddings with sentence-transformers + ChromaDB storage |
-| PR 7 | Ollama integration, RAG query endpoint |
-| PR 7 | Conversation history, session management |
-| PR 8 | Frontend UI (optional) |
+| PR 7 | Semantic retrieval with ChromaDB vector search |
+| PR 8 (this) | Grounded answer generation via local Ollama |
+| PR 9 | Conversation history, multi-turn chat sessions |
