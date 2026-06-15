@@ -1,0 +1,360 @@
+Enterprise Knowledge Assistant Test Document
+Version: 1.0
+Purpose: This file is intentionally long so it can be uploaded, chunked, embedded, stored in ChromaDB, and queried during retrieval testing.
+
+================================================================================
+SECTION 1: PROJECT OVERVIEW
+================================================================================
+
+The Enterprise Knowledge Assistant is an internal AI-powered search and question-answering system. Its main purpose is to help employees find useful information from company documents without manually searching through folders, PDFs, markdown files, meeting notes, onboarding guides, and technical documentation.
+
+The assistant does not simply perform keyword search. Instead, it uses semantic search. This means the system tries to understand the meaning behind a user question and match it with relevant document chunks, even when the exact words are different.
+
+For example, if a user asks, "How do I reset my development database?", the system may retrieve a chunk titled "Rebuilding local PostgreSQL containers" because both pieces of text are semantically related.
+
+The core workflow is:
+
+1. A user uploads a document.
+2. The backend extracts text from the document.
+3. The text is split into smaller chunks.
+4. Each chunk is converted into an embedding vector.
+5. The vector is stored in a vector database.
+6. When a user asks a question, the question is also converted into a vector.
+7. The system compares the query vector against stored chunk vectors.
+8. The top K most similar chunks are returned.
+9. A language model can use those chunks to generate a grounded answer.
+
+This architecture is commonly known as Retrieval-Augmented Generation, or RAG.
+
+================================================================================
+SECTION 2: WHY CHUNKING IS IMPORTANT
+================================================================================
+
+Large documents cannot usually be embedded or sent to a language model as one big block. Documents may contain thousands or millions of characters. Language models and embedding models have token limits, so the system must split text into smaller pieces.
+
+Chunking is the process of dividing a document into manageable sections. Good chunking improves retrieval quality because each vector represents a focused piece of meaning.
+
+Bad chunking can hurt results. If chunks are too small, they may lose context. If chunks are too large, they may contain too many unrelated ideas. The system should choose a chunk size that balances context and precision.
+
+A common chunk size for RAG systems is between 300 and 800 tokens. A small overlap between chunks, such as 50 tokens, can help preserve context across boundaries.
+
+Example:
+
+Original text:
+"The reporting system generates CSV cache files after running SQL queries. If a report has already been cached, the API can skip regenerating the same data."
+
+Possible chunks:
+- Chunk 1: "The reporting system generates CSV cache files after running SQL queries."
+- Chunk 2: "If a report has already been cached, the API can skip regenerating the same data."
+
+A better chunk might preserve both sentences together because they explain one connected idea.
+
+================================================================================
+SECTION 3: EMBEDDINGS
+================================================================================
+
+An embedding is a numeric representation of text. It converts meaning into a list of numbers. Similar meanings should produce vectors that are close to each other in vector space.
+
+For example, the sentences "How do I deploy the API?" and "What is the process for releasing the backend service?" may have similar embeddings because they are about deployment.
+
+The embedding model reads text and outputs a vector. A vector may have hundreds or thousands of dimensions. Humans do not directly read these vectors. They are useful because mathematical distance can compare them.
+
+Common similarity metrics include cosine similarity, dot product, and Euclidean distance. ChromaDB can store embeddings and perform similarity search efficiently.
+
+Important distinction:
+- The document text is human-readable.
+- The embedding is a numeric vector.
+- Metadata is additional structured information, such as document ID, chunk index, filename, page number, and upload timestamp.
+
+In ChromaDB, the human-readable chunk text is often stored in the "documents" field. Metadata is stored in the "metadatas" field. The vectors are stored as embeddings.
+
+================================================================================
+SECTION 4: TOP K RETRIEVAL
+================================================================================
+
+Top K retrieval means returning the K most relevant chunks for a query. If K equals 5, the vector database returns the five chunks that are most similar to the query vector.
+
+Choosing K is important.
+
+If K is too small, the answer may miss useful context. If K is too large, the language model may receive noisy or irrelevant chunks. A common starting value is K equals 5.
+
+Example query:
+"How does the system avoid duplicate document chunks?"
+
+Possible retrieved chunks:
+1. Chunk about document hash checks.
+2. Chunk about duplicate upload protection.
+3. Chunk about unique chunk IDs.
+4. Chunk about batch embedding.
+5. Chunk about metadata validation.
+
+The system can then pass these chunks to the language model to answer the user.
+
+================================================================================
+SECTION 5: DOCUMENT UPLOAD FLOW
+================================================================================
+
+The upload endpoint receives a file from the user. The backend should validate the file type, file size, and file name. Supported file types may include TXT, Markdown, and PDF.
+
+After validation, the file is saved to local storage or object storage. In a local Docker Compose setup, files may be saved to a mounted volume such as /app/storage/uploads.
+
+The database stores metadata about the uploaded document. This metadata may include:
+- Original filename
+- Saved file path
+- File type
+- File size
+- Upload status
+- Processing status
+- Created timestamp
+- Updated timestamp
+
+The document record is useful because ChromaDB stores vectors, but the application database stores relational metadata and business state.
+
+A typical status flow is:
+1. uploaded
+2. text_extracted
+3. chunked
+4. embedded
+5. indexed
+6. failed, if an error occurs
+
+================================================================================
+SECTION 6: TEXT EXTRACTION
+================================================================================
+
+Text extraction depends on the file type. For TXT and Markdown files, the backend can usually read the file as plain text.
+
+For PDF files, the backend may use a library such as pypdf to extract text from each page. PDF extraction can be imperfect because some PDFs are scanned images, have unusual layouts, or contain tables.
+
+If a PDF is scanned, normal text extraction may return little or no text. In that case, OCR may be required, but OCR is slower and more complex.
+
+The extracted text should be normalized before chunking. Normalization may include:
+- Removing repeated whitespace
+- Fixing unusual line breaks
+- Removing empty pages
+- Preserving headings when possible
+- Keeping page numbers in metadata
+
+Good extraction improves both chunking and retrieval.
+
+================================================================================
+SECTION 7: VECTOR STORE RESPONSIBILITIES
+================================================================================
+
+The vector store service is responsible for writing and reading chunks from ChromaDB. It should not contain unrelated business logic.
+
+Responsibilities may include:
+- Creating or loading a collection
+- Adding documents, embeddings, IDs, and metadata
+- Searching chunks by query embedding
+- Returning top K results
+- Handling empty collections
+- Handling ChromaDB connection errors
+- Converting Chroma distances into readable scores
+
+The vector store should be wrapped behind a clean service layer. This makes the app easier to test and makes it easier to replace ChromaDB later with another vector database.
+
+Possible alternatives to ChromaDB include:
+- Pinecone
+- Weaviate
+- Qdrant
+- Milvus
+- PostgreSQL with pgvector
+
+For this project, ChromaDB is a good local-first choice because it works well with Docker Compose and does not require paid cloud infrastructure.
+
+================================================================================
+SECTION 8: POSTGRES RESPONSIBILITIES
+================================================================================
+
+PostgreSQL stores relational application data. It should store documents, chunks, conversations, messages, and LLM run records.
+
+PostgreSQL is not only a storage layer. It also helps with traceability, debugging, and auditability.
+
+Example tables:
+- documents
+- document_chunks
+- conversations
+- messages
+- llm_runs
+
+The documents table can store the uploaded file metadata. The document_chunks table can store chunk text, chunk index, token count, and references to the original document.
+
+Even when chunks are stored in ChromaDB, keeping chunk records in PostgreSQL can help with debugging and admin interfaces.
+
+The llm_runs table can store information about prompts, models, retrieved context, latency, token usage, and errors.
+
+================================================================================
+SECTION 9: DOCKER COMPOSE DEVELOPMENT SETUP
+================================================================================
+
+A local development setup may use Docker Compose with three services:
+
+1. api
+2. postgres
+3. chromadb
+
+The api service runs the FastAPI backend. The postgres service stores relational data. The chromadb service stores vector embeddings.
+
+The API container can talk to PostgreSQL using the service name "postgres". It can talk to ChromaDB using the service name "chromadb".
+
+Example:
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
+CHROMA_HOST=chromadb
+CHROMA_PORT=8000
+
+From inside the API container, localhost means the API container itself, not the host machine. That is why service names are important in Docker Compose networking.
+
+================================================================================
+SECTION 10: COMMON DOCKER DEBUGGING COMMANDS
+================================================================================
+
+To start the app:
+
+docker compose up --build
+
+To start in detached mode:
+
+docker compose up -d --build
+
+To view logs:
+
+docker compose logs -f api
+
+To enter the API container:
+
+docker compose exec api bash
+
+To open a Python shell inside the API container:
+
+docker compose exec api python
+
+To run migrations:
+
+docker compose exec api alembic upgrade head
+
+To inspect ChromaDB from Python:
+
+import chromadb
+client = chromadb.HttpClient(host="chromadb", port=8000)
+client.list_collections()
+
+If a collection does not exist, list the collections first before calling get_collection.
+
+================================================================================
+SECTION 11: SAMPLE COMPANY POLICY CONTENT
+================================================================================
+
+This section exists to make retrieval testing easier. It contains realistic internal knowledge that can be queried later.
+
+Remote Work Policy:
+Employees may work remotely up to three days per week. Team leads may approve additional remote days for focused work, health needs, or travel constraints. Employees should keep their calendar updated and remain reachable during core hours from 10:00 AM to 4:00 PM.
+
+Meeting Policy:
+Meetings should have a clear agenda. Recurring meetings should be reviewed every quarter. If a meeting has no clear decision or discussion topic, it should be replaced with an async update.
+
+Code Review Policy:
+Every pull request requires at least one approval before merging. High-risk changes, such as database migrations, payment logic, authentication changes, and infrastructure changes, require two approvals. Reviewers should check correctness, readability, tests, security, and performance.
+
+Incident Policy:
+Production incidents should be logged in the incident tracker. The first priority is mitigation. Root cause analysis should happen after the system is stable. A postmortem should include timeline, impact, cause, resolution, and prevention actions.
+
+Onboarding Policy:
+New engineers should complete environment setup, read the architecture overview, run the test suite, and pick a small starter task in their first week. A mentor should be assigned for the first month.
+
+================================================================================
+SECTION 12: SAMPLE TECHNICAL KNOWLEDGE BASE
+================================================================================
+
+Caching Strategy:
+The reporting platform uses cache files to avoid regenerating expensive reports on every request. When a report is requested, the API checks whether a valid cache exists. If valid cache is available, the API reads from the cache. If not, the backend regenerates the data.
+
+Cache Invalidation:
+Cache invalidation should happen when the report SQL changes, the report metadata changes, or the source data has been refreshed. Metadata-only changes should not always require full data regeneration.
+
+Large Report Optimization:
+Very large reports should not be loaded fully into memory as pandas DataFrames. A better approach is to export data to Parquet and query it using DuckDB. This allows efficient filtering and aggregation without exhausting memory.
+
+Background Jobs:
+Long-running work should be handled by background workers. The web server should accept the request, enqueue a job, and return a status response. The worker can process the heavy task asynchronously.
+
+Database Indexing:
+Indexes speed up reads by allowing the database to find rows without scanning the entire table. A B-tree index is useful for equality filters, range filters, and sorting. However, indexes slow down writes slightly and consume disk space.
+
+================================================================================
+SECTION 13: SAMPLE AI KNOWLEDGE BASE
+================================================================================
+
+RAG Evaluation:
+A RAG system should be evaluated on retrieval quality and answer quality. Retrieval quality checks whether the correct chunks are returned. Answer quality checks whether the generated answer is accurate, complete, and grounded in the retrieved context.
+
+Hallucination:
+A hallucination happens when the language model produces information that is not supported by the source documents. Grounding answers in retrieved chunks reduces hallucination risk, but it does not eliminate it completely.
+
+Prompt Engineering:
+A good RAG prompt should tell the model to answer only using the provided context. If the answer is not in the context, the model should say that the information is not available.
+
+Structured Outputs:
+Structured outputs are useful when the application needs predictable JSON responses. The model should follow a schema so the backend can parse and validate the result.
+
+Agentic Workflows:
+Agents can use tools, call APIs, search documents, and perform multi-step tasks. However, agents add complexity. A simple retrieval pipeline is usually better before introducing agent orchestration.
+
+================================================================================
+SECTION 14: TEST QUERIES YOU CAN TRY
+================================================================================
+
+After uploading and indexing this file, try these queries:
+
+1. What is the purpose of the Enterprise Knowledge Assistant?
+2. Why do we split documents into chunks?
+3. What is an embedding?
+4. What does top K mean in vector search?
+5. How does the upload flow work?
+6. What should happen if a PDF is scanned?
+7. What does the vector store service do?
+8. Why do we still need PostgreSQL if we use ChromaDB?
+9. How does Docker Compose networking work between API and ChromaDB?
+10. What is the remote work policy?
+11. How many approvals are needed for high-risk pull requests?
+12. What should be included in a postmortem?
+13. How should large reports be optimized?
+14. Why should long-running jobs run in the background?
+15. What is hallucination in RAG?
+16. How should a RAG prompt behave when the answer is missing?
+17. When should cache invalidation happen?
+18. What are structured outputs useful for?
+19. What is the difference between document text and embeddings?
+20. Why is ChromaDB a good choice for local development?
+
+================================================================================
+SECTION 15: LONG REPEATED CONTEXT FOR CHUNKING TESTS
+================================================================================
+
+The following paragraphs are intentionally verbose so the chunker has enough content to split into multiple chunks.
+
+A knowledge assistant becomes more useful when the documents are organized, but it should not require perfect organization. Many companies have scattered information across Google Docs, Notion pages, Confluence pages, PDFs, GitHub READMEs, Slack messages, and old onboarding folders. A retrieval system can help unify access to that knowledge.
+
+However, retrieval quality depends heavily on the quality of the source material. If the documents are outdated, contradictory, or vague, the assistant may retrieve confusing context. The system should show citations or source references so users can verify the answer.
+
+Chunk metadata is very important. Each chunk should know where it came from. Useful metadata includes document ID, filename, chunk index, section title, page number, source type, and creation time. Without metadata, debugging retrieval becomes harder.
+
+When a query is too long, the application may need to limit its length. Extremely long queries can be expensive to embed and may include irrelevant instructions. A reasonable maximum query length protects the API from abuse and accidental huge pasted text.
+
+Batch processing is useful for embedding many chunks efficiently. Instead of calling the embedding model once per chunk, the system can embed multiple chunks in a batch. This reduces overhead and improves throughput.
+
+Duplicate protection is also important. If the same file is uploaded multiple times, the system should avoid creating duplicate chunks and duplicate embeddings. One strategy is to compute a file hash, such as SHA-256, and check whether the same content already exists.
+
+Errors should be visible and recoverable. If embedding fails halfway through a document, the system should record the failure and allow retrying. It should not silently leave the document in an unclear state.
+
+The API should have tests for upload validation, text extraction, chunking, embedding, vector search, and retrieval response formatting. Tests make refactoring safer and help ensure the system behaves correctly.
+
+A retrieval result should include the chunk text, metadata, score, and source document information. The frontend can display the most relevant snippets and optionally allow users to open the original document.
+
+Security matters because internal documents may contain sensitive information. The system should eventually support access control. Users should only retrieve chunks from documents they are allowed to see.
+
+In the first version, it is acceptable to build a local-only prototype. The goal is to understand the full pipeline from upload to retrieval. After that, the project can be improved with authentication, authorization, async workers, cloud storage, monitoring, and evaluation.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -1,0 +1,876 @@
+================================================================================
+COMPANY OVERVIEW
+================================================================================
+
+NovaTech Solutions is a fictional mid-sized SaaS company with approximately 500 employees.
+The company provides cloud-based analytics and workflow automation products to enterprise customers
+across Europe, the Middle East, and North America.
+
+Mission:
+To empower businesses through reliable, secure, and intelligent software.
+
+Core Values:
+- Customer Obsession
+- Ownership
+- Continuous Learning
+- Simplicity
+- Integrity
+- Collaboration
+
+Headquarters: London, United Kingdom
+Regional Offices: Cairo, Berlin, Toronto
+
+
+================================================================================
+EMPLOYEE HANDBOOK
+================================================================================
+
+Employees are expected to maintain professional conduct, respect colleagues,
+protect confidential information, and adhere to company policies.
+
+Standard workweek:
+- Monday to Friday
+- 40 hours per week
+
+Core hours:
+- 10:00 AM to 4:00 PM local time
+
+Employees should keep calendars updated and communicate planned absences.
+
+
+================================================================================
+REMOTE WORK POLICY
+================================================================================
+
+Employees may work remotely up to three days per week.
+
+Additional remote days may be approved by managers for:
+- Health circumstances
+- Travel constraints
+- Focus work periods
+
+Employees must:
+- Attend mandatory meetings
+- Remain reachable during core hours
+- Maintain secure working environments
+
+Equipment remains company property.
+
+
+================================================================================
+TIME OFF POLICY
+================================================================================
+
+Annual Leave:
+- 25 business days annually.
+
+Sick Leave:
+- Up to 10 paid sick days annually.
+- Medical documentation may be required after three consecutive days.
+
+Parental Leave:
+- Primary caregivers: 16 weeks paid leave.
+- Secondary caregivers: 4 weeks paid leave.
+
+
+================================================================================
+SECURITY POLICY
+================================================================================
+
+Passwords must use approved password managers.
+
+Multi-factor authentication is mandatory for:
+- Email accounts
+- VPN access
+- Production systems
+- Cloud providers
+
+Sharing credentials is prohibited.
+
+Security incidents must be reported within one hour of discovery.
+
+
+================================================================================
+ENGINEERING STANDARDS
+================================================================================
+
+All production code requires peer review.
+
+Requirements:
+- Automated tests
+- Clear naming conventions
+- Documentation updates
+- Monitoring considerations
+
+High-risk changes require two approvals:
+- Database migrations
+- Authentication changes
+- Payment processing logic
+- Infrastructure modifications
+
+
+================================================================================
+DEPLOYMENT RUNBOOK
+================================================================================
+
+Production deployments occur Tuesday and Thursday.
+
+Deployment checklist:
+1. Verify tests pass.
+2. Confirm rollback strategy.
+3. Notify stakeholders.
+4. Deploy using CI/CD.
+5. Monitor logs and dashboards.
+6. Validate business metrics.
+
+Emergency hotfixes require Engineering Manager approval.
+
+
+================================================================================
+INCIDENT RESPONSE
+================================================================================
+
+Severity Levels:
+
+SEV-1:
+Complete service outage affecting critical customers.
+
+SEV-2:
+Major degradation affecting multiple customers.
+
+SEV-3:
+Partial degradation with workaround.
+
+SEV-4:
+Minor issue.
+
+SEV-1 Escalation:
+1. Notify Incident Commander.
+2. Create incident bridge.
+3. Engage on-call engineer.
+4. Update status page every 30 minutes.
+5. Document timeline.
+6. Conduct postmortem within five business days.
+
+Priority during incidents:
+Mitigate first.
+Investigate root cause after stabilization.
+
+
+================================================================================
+ON-CALL POLICY
+================================================================================
+
+Engineering teams participate in weekly rotations.
+
+Expectations:
+- Respond within 15 minutes.
+- Acknowledge alerts.
+- Escalate when necessary.
+
+Escalation Path:
+Primary Engineer → Secondary Engineer → Engineering Manager → Director of Engineering.
+
+
+================================================================================
+AWS INFRASTRUCTURE
+================================================================================
+
+Core services include:
+- ECS Fargate
+- RDS PostgreSQL
+- S3
+- CloudWatch
+- Lambda
+- Step Functions
+- Route 53
+- IAM
+- Secrets Manager
+
+Production access requires approval and least-privilege permissions.
+
+
+================================================================================
+DATA RETENTION POLICY
+================================================================================
+
+Customer data:
+Retained for seven years.
+
+Audit logs:
+Retained for three years.
+
+Application logs:
+Retained for ninety days.
+
+Backup retention:
+Thirty-five days.
+
+Data deletion requests must comply with GDPR obligations.
+
+
+================================================================================
+CUSTOMER SUPPORT ESCALATIONS
+================================================================================
+
+Enterprise customers receive:
+- 99.9% uptime SLA
+- Dedicated account managers
+- Priority support
+
+Escalation process:
+Support → Technical Specialist → Engineering → Leadership.
+
+
+================================================================================
+ARCHITECTURE DECISIONS
+================================================================================
+
+ADR-001:
+PostgreSQL selected for transactional workloads.
+
+ADR-002:
+Redis introduced for distributed caching.
+
+ADR-003:
+Parquet and DuckDB adopted for large-scale analytics.
+
+ADR-004:
+Background processing standardized using Celery workers.
+
+ADR-005:
+Containerized deployments standardized through Docker.
+
+
+================================================================================
+NEW HIRE FAQ
+================================================================================
+
+Q: How do I set up my development environment?
+A: Follow onboarding documentation and complete setup during the first week.
+
+Q: Who approves PTO?
+A: Your direct manager.
+
+Q: How do I request production access?
+A: Submit a formal access request through IT.
+
+Q: Where are architectural decisions documented?
+A: In the Architecture Decision Record repository.
+
+
+================================================================================
+LEADERSHIP MEETING NOTES
+================================================================================
+
+Q1 priorities:
+- Improve reliability.
+- Reduce operational costs.
+- Increase automated test coverage.
+- Expand enterprise customer adoption.
+
+Q2 initiatives:
+- Introduce AI-powered search capabilities.
+- Improve observability.
+- Optimize data pipelines.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 1
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 1
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 2
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 2
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 3
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 3
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 4
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 4
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 5
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 5
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 6
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 6
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 7
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 7
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 8
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 8
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 9
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 9
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 10
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 10
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 11
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 11
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 12
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 12
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 13
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 13
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 14
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 14
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 15
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 15
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 16
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 16
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 17
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 17
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 18
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 18
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 19
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 19
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 20
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 20
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 21
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 21
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 22
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 22
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 23
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 23
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 24
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 24
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 25
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 25
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 26
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 26
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 27
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 27
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 28
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 28
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 29
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 29
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
+
+================================================================================
+TEAM KNOWLEDGE BASE ARTICLE 30
+================================================================================
+
+This article documents operational practices used by the Engineering Team.
+
+Article Number: 30
+
+Guidelines:
+- Review alerts carefully before escalating.
+- Validate assumptions using logs and dashboards.
+- Communicate customer impact clearly.
+- Capture lessons learned.
+- Update documentation after significant changes.
+
+Historical note:
+A previous outage demonstrated the importance of rollback procedures and monitoring.
+Future improvements should prioritize automation and resilience.
+
