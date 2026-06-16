@@ -108,6 +108,32 @@ curl http://localhost:8000/documents/<returned-id>
 
 > The original file is saved under `storage/uploads/` on the host (mounted into the container at `/app/storage/uploads`).
 
+### Sample documents
+
+The `samples/` directory contains ready-to-upload `.txt` files for manual testing of the full upload → chunk → index → search/answer pipeline:
+
+| File | Contents |
+|---|---|
+| `samples/enterprise_knowledge_assistant_test_document.txt` | Long synthetic document describing this project's own architecture (upload, chunking, embeddings, ChromaDB, retrieval) — useful for testing chunk boundaries and retrieval quality. |
+| `samples/novatech_enterprise_handbook.txt` | Fictional company handbook: remote work policy, PTO/leave, security requirements, engineering standards, deployment/incident response procedures, on-call rotations, AWS infrastructure overview, data retention, new hire FAQs. |
+| `samples/novatech_product_operations_knowledge_base.txt` | Fictional product/ops knowledge base: product catalog, pricing rules, customer tiers, business continuity (RTO/RPO), backup schedules, vendor policies, escalation matrices. |
+
+Example using the handbook:
+
+```bash
+curl -X POST http://localhost:8000/documents/upload \
+  -F "file=@samples/novatech_enterprise_handbook.txt"
+
+curl -X POST http://localhost:8000/documents/<returned-id>/chunk
+curl -X POST http://localhost:8000/documents/<returned-id>/index
+
+curl "http://localhost:8000/search?q=remote+work+policy&k=3"
+
+curl -X POST http://localhost:8000/answer \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"How many remote days per week are employees allowed?\",\"k\":5}"
+```
+
 ## Chunking
 
 After uploading, trigger chunking to split the document text into overlapping **token-based** chunks and persist them in PostgreSQL.
