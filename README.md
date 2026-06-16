@@ -110,25 +110,29 @@ curl http://localhost:8000/documents/<returned-id>
 
 ## Chunking
 
-After uploading, trigger chunking to split the document text into overlapping character-based chunks and persist them in PostgreSQL.
+After uploading, trigger chunking to split the document text into overlapping **token-based** chunks and persist them in PostgreSQL.
 
-**Parameters:** chunk size = 500 characters, overlap = 50 characters.
+**Parameters:** chunk size = 500 tokens, overlap = 50 tokens — tokenized with the `sentence-transformers/all-MiniLM-L6-v2` WordPiece tokenizer (the same tokenizer used for embeddings).
 
-**Overlap example:**
+Chunk boundaries are computed from token character-offsets and sliced directly out of the *original* text rather than reconstructed from decoded tokens, so casing, punctuation, and spacing are preserved exactly as written. Each chunk is lightly cleaned before storage — decorative separator lines (`====`, `----`, `____`) are stripped, repeated whitespace is collapsed, and excess blank lines are reduced — without altering wording or punctuation.
+
+**Overlap example** (9 tokens, chunk_size=5, chunk_overlap=2, step=3):
 
 ```
-Chunk 1: characters   0–499
-Chunk 2: characters 450–949
-Chunk 3: characters 900–1399
+Chunk 1: tokens 0–4
+Chunk 2: tokens 3–7  (2-token overlap with chunk 1)
+Chunk 3: tokens 6–8  (2-token overlap with chunk 2)
 ```
 
-Each chunk overlaps the previous by 50 characters so context is preserved at boundaries. Chunking is idempotent — running it again replaces existing chunks.
+Chunking is idempotent — running it again deletes existing chunks for the document and replaces them.
 
 Chunk a document:
 
 ```bash
 curl -X POST http://localhost:8000/documents/<document-id>/chunk
 ```
+
+Optional query params: `chunk_size` (default 500), `chunk_overlap` (default 50, must be less than `chunk_size`).
 
 Retrieve chunks:
 
@@ -150,6 +154,40 @@ ORDER BY chunk_index;
 ```
 
 Expected after chunking: `status = chunked`, `chunk_count > 0`.
+
+## Embeddings & Vector Indexing
+
+After chunking, index a document to generate embeddings and store them in ChromaDB for semantic search.
+
+Embeddings are generated with `sentence-transformers/all-MiniLM-L6-v2` (lazy-loaded once per process; model weights are cached under `~/.cache/huggingface`).
+
+Index a document:
+
+```bash
+curl -X POST http://localhost:8000/documents/<document-id>/index
+```
+
+Indexing is **selective**: only chunks that haven't been indexed yet, or were indexed into a different Chroma collection, are embedded. Already-indexed chunks are skipped, so re-running indexing after adding new chunks doesn't redo unchanged work.
+
+Example response:
+
+```json
+{
+  "document_id": "...",
+  "status": "vector_indexed",
+  "chunk_count": 12,
+  "indexed_chunk_count": 12,
+  "skipped_chunk_count": 0,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "chroma_collection": "enterprise_knowledge_chunks"
+}
+```
+
+Each chunk is stored in ChromaDB with metadata: `document_id`, `chunk_id`, `chunk_index`, `filename`, `token_count`.
+
+Expected after indexing: `status = vector_indexed`.
+
+> If you change the chunking or cleanup logic and want to fully re-embed existing documents, re-run `/chunk` (which deletes and regenerates chunks, clearing their `chroma_id`) before re-indexing — otherwise indexing will skip chunks it already considers up to date.
 
 Stop services:
 
@@ -338,7 +376,8 @@ This PR implements retrieval only. It does NOT generate answers.
 | GET | `/health` | App process health (no DB dependency) |
 | GET | `/health/db` | Database connectivity check |
 | POST | `/documents/upload` | Upload a document (`.txt`, `.md`, `.pdf`) |
-| POST | `/documents/{id}/chunk` | Chunk a document and persist to PostgreSQL |
+| POST | `/documents/{id}/chunk` | Chunk a document (token-based) and persist to PostgreSQL |
+| POST | `/documents/{id}/index` | Generate embeddings and index a document's chunks into ChromaDB |
 | GET | `/documents/{id}/chunks` | List chunks with previews and token counts |
 | GET | `/documents/{id}` | Get document metadata by UUID |
 | GET | `/documents` | List all documents |
