@@ -1,16 +1,7 @@
 // Mock API for the Enterprise Knowledge Assistant.
 // Replace these functions with real FastAPI calls later.
 
-export type DocStatus = "Uploaded" | "Chunked" | "Vector Indexed";
-
-export interface Document {
-  id: string;
-  name: string;
-  type: "PDF" | "TXT" | "MD";
-  status: DocStatus;
-  chunks: number;
-  createdAt: string;
-}
+export type { DocStatus, Document } from "@/types/document";
 
 export interface RetrievedChunk {
   id: string;

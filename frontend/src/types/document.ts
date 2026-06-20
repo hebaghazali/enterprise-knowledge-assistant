@@ -1,0 +1,15 @@
+export type DocStatus =
+  | "Uploaded"
+  | "Processing"
+  | "Chunked"
+  | "Vector Indexed"
+  | "Failed";
+
+export interface Document {
+  id: string;
+  name: string;
+  type: "PDF" | "TXT" | "MD";
+  status: DocStatus;
+  chunks: number;
+  createdAt: string;
+}
