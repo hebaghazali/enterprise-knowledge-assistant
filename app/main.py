@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.answer import router as answer_router
 from app.api.routes.conversations import router as conversations_router
@@ -13,6 +14,14 @@ app = FastAPI(
     title="Enterprise Knowledge Assistant API",
     description="Local-first RAG backend for document-grounded conversational AI.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)

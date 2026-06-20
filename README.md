@@ -46,7 +46,19 @@ PR 1: FastAPI skeleton, health endpoint, config, tests.
 | Containerisation | Docker Compose |
 | Testing | pytest + httpx |
 
-## Local setup (Docker — recommended)
+## Local development
+
+### Ports
+
+| Service | URL |
+|---|---|
+| Backend API | http://localhost:8000 |
+| API docs (Swagger) | http://localhost:8000/docs |
+| Frontend | http://localhost:3000 or http://localhost:5173 |
+| ChromaDB | http://localhost:8001 |
+| PostgreSQL | localhost:5432 |
+
+### Backend (Docker — recommended)
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
@@ -55,12 +67,20 @@ cp .env.example .env
 docker compose up --build
 ```
 
-| Service | URL |
-|---|---|
-| API | http://localhost:8000 |
-| API docs | http://localhost:8000/docs |
-| PostgreSQL | localhost:5432 |
-| ChromaDB | http://localhost:8001 |
+### Frontend (local Vite/Nitro dev server)
+
+Requires [Bun](https://bun.sh/).
+
+```bash
+cd frontend
+cp .env.example .env
+bun install
+bun run dev
+```
+
+The frontend uses TanStack Start with Nitro as the SSR server. The dev server prints the actual port on startup — it is typically `3000` (Nitro default) or `5173` (Vite default).
+
+`VITE_API_BASE_URL` in `frontend/.env` controls which backend the frontend calls. The default value (`http://localhost:8000`) points at the Docker Compose backend.
 
 Run database migrations (in a second terminal after `docker compose up`):
 
