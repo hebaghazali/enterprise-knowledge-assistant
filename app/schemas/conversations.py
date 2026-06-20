@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.schemas.answering import AnswerSourceResponse
+from app.schemas.answering import AnswerSourceResponse, CitationResponse
 
 
 class ConversationResponse(BaseModel):
@@ -32,4 +32,5 @@ class SendMessageResponse(BaseModel):
     conversation_id: str
     message_id: str
     answer: str
+    citations: list[CitationResponse]
     sources: list[AnswerSourceResponse]

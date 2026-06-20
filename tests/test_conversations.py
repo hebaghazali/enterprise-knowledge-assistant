@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.db.models import Conversation, LLMRun, Message
 from app.db.session import get_db_session
 from app.main import app
-from app.schemas.answering import AnswerSourceResponse
+from app.schemas.answering import AnswerSourceResponse, CitationResponse
 from app.schemas.retrieval import SearchResultResponse
 from app.services.answering import AnswerResult, RetrievalEmptyError
 from app.services.llm import OllamaUnavailableError
@@ -42,12 +42,23 @@ _FAKE_SOURCE = AnswerSourceResponse(
     content_preview="Employees may work remotely up to three days per week.",
 )
 
-_FAKE_ANSWER_TEXT = "Employees may work remotely up to three days per week."
+_FAKE_CITATION = CitationResponse(
+    source_number=1,
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    filename="handbook.txt",
+    chunk_index=0,
+    similarity_score=0.9,
+    content_preview="Employees may work remotely up to three days per week.",
+)
+
+_FAKE_ANSWER_TEXT = "Employees may work remotely up to three days per week. [Source 1]"
 
 _FAKE_RESULT = AnswerResult(
     answer=_FAKE_ANSWER_TEXT,
     prompt="the full prompt",
     sources=[_FAKE_SOURCE],
+    citations=[_FAKE_CITATION],
     latency_ms=200,
 )
 
@@ -767,6 +778,104 @@ def test_send_message_passes_empty_history_on_first_message(mock_gen, mock_count
         )
         call_kwargs = mock_gen.call_args.kwargs
         assert call_kwargs["history"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Citations in conversation message response
+# ---------------------------------------------------------------------------
+
+
+@patch("app.api.routes.conversations.count_query_tokens", return_value=10)
+@patch("app.api.routes.conversations.generate_answer", new_callable=AsyncMock)
+def test_send_message_citations_included(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+    mock_db.get.return_value = _fake_conversation()
+    mock_db.execute.return_value = _make_scalars_result([])
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        data = client.post(
+            f"/conversations/{_CONV_ID}/messages",
+            json={"message": "remote days?", "k": 5},
+        ).json()
+        assert "citations" in data
+        assert len(data["citations"]) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.conversations.count_query_tokens", return_value=10)
+@patch("app.api.routes.conversations.generate_answer", new_callable=AsyncMock)
+def test_send_message_citation_fields(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+    mock_db.get.return_value = _fake_conversation()
+    mock_db.execute.return_value = _make_scalars_result([])
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        data = client.post(
+            f"/conversations/{_CONV_ID}/messages",
+            json={"message": "remote days?", "k": 5},
+        ).json()
+        cit = data["citations"][0]
+        assert cit["source_number"] == 1
+        assert cit["chunk_id"] == "chunk-1"
+        assert cit["document_id"] == "doc-1"
+        assert cit["filename"] == "handbook.txt"
+        assert cit["chunk_index"] == 0
+        assert cit["similarity_score"] == 0.9
+        assert "content_preview" in cit
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.conversations.count_query_tokens", return_value=10)
+@patch("app.api.routes.conversations.generate_answer", new_callable=AsyncMock)
+def test_send_message_sources_still_present_with_citations(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+    mock_db.get.return_value = _fake_conversation()
+    mock_db.execute.return_value = _make_scalars_result([])
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        data = client.post(
+            f"/conversations/{_CONV_ID}/messages",
+            json={"message": "remote days?", "k": 5},
+        ).json()
+        assert "sources" in data
+        assert len(data["sources"]) == 1
+        assert "citations" in data
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.conversations.count_query_tokens", return_value=10)
+@patch("app.api.routes.conversations.generate_answer", new_callable=AsyncMock)
+def test_send_message_llm_run_metadata_includes_citations(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+    mock_db.get.return_value = _fake_conversation()
+    mock_db.execute.return_value = _make_scalars_result([])
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        client.post(
+            f"/conversations/{_CONV_ID}/messages",
+            json={"message": "remote days?", "k": 3},
+        )
+        added = [c.args[0] for c in mock_db.add.call_args_list]
+        llm_run = next(a for a in added if isinstance(a, LLMRun))
+        assert "citations" in llm_run.run_metadata
+        citations_meta = llm_run.run_metadata["citations"]
+        assert len(citations_meta) == 1
+        assert citations_meta[0]["source_number"] == 1
+        assert citations_meta[0]["chunk_id"] == "chunk-1"
+        assert citations_meta[0]["filename"] == "handbook.txt"
     finally:
         app.dependency_overrides.clear()
 

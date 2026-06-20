@@ -11,17 +11,18 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 9)
+## Current scope (PR 10)
 
-Multi-turn conversational RAG using persistent conversation history:
+Structured source citations in grounded answers:
 
-- **`POST /conversations`** — create a new conversation session
-- **`GET /conversations/{id}`** — retrieve conversation metadata and full message history
-- **`POST /conversations/{id}/messages`** — send a message; retrieves relevant chunks, builds a history-aware prompt, calls Ollama, stores both user and assistant messages, returns grounded answer with sources
-- Conversation history (last 10 messages) is injected into the prompt before the retrieved context
-- Every answer is logged in `llm_runs` linked to its `conversation_id`
-- All previous endpoints remain unchanged
+- Prompt instructs the local LLM to cite facts inline using `[Source 1]`, `[Source 2]`, etc.
+- `/answer` and `/conversations/{id}/messages` responses include a structured `citations` array
+- Each citation carries `source_number`, `filename`, `chunk_id`, `document_id`, `chunk_index`, `similarity_score`, and a 300-character `content_preview`
+- `sources` remains unchanged for backward compatibility (200-character preview)
+- `llm_runs.run_metadata` now includes a `citations` summary (source number, chunk ID, filename)
+- All previous endpoints and response fields remain unchanged
 
+PR 9: Multi-turn conversational RAG with persistent conversation history.
 PR 8: Grounded answer generation via Ollama with `POST /answer`.
 PR 7: Semantic retrieval with `GET /search`, vector indexing with ChromaDB.
 PR 6: Embeddings with sentence-transformers + ChromaDB storage.
@@ -314,7 +315,18 @@ Expected response:
 ```json
 {
   "question": "How many remote days per week are employees allowed?",
-  "answer": "Employees may work remotely up to three days per week.",
+  "answer": "Employees may work remotely up to three days per week. [Source 1]",
+  "citations": [
+    {
+      "source_number": 1,
+      "chunk_id": "...",
+      "document_id": "...",
+      "filename": "novatech_enterprise_handbook.txt",
+      "chunk_index": 1,
+      "similarity_score": 0.8421,
+      "content_preview": "REMOTE WORK POLICY\n\nEmployees may work remotely up to three days per week..."
+    }
+  ],
   "sources": [
     {
       "chunk_id": "...",
@@ -430,7 +442,18 @@ Response:
 {
   "conversation_id": "...",
   "message_id": "...",
-  "answer": "Employees may work remotely up to three days per week.",
+  "answer": "Employees may work remotely up to three days per week. [Source 1]",
+  "citations": [
+    {
+      "source_number": 1,
+      "chunk_id": "...",
+      "document_id": "...",
+      "filename": "novatech_enterprise_handbook.txt",
+      "chunk_index": 1,
+      "similarity_score": 0.8421,
+      "content_preview": "REMOTE WORK POLICY\n\nEmployees may work remotely..."
+    }
+  ],
   "sources": [
     {
       "chunk_id": "...",
@@ -496,6 +519,26 @@ WHERE conversation_id IS NOT NULL
 ORDER BY created_at DESC;
 ```
 
+## Source Citations
+
+Retrieved chunks are numbered as Source 1, Source 2, etc. in retrieval order. The prompt instructs the local LLM to cite facts inline using those numbers (e.g. `[Source 1]`, `[Source 1], [Source 2]`). The API also returns structured citation metadata so clients can display source previews and links alongside the answer.
+
+Each citation in the response contains:
+
+| Field | Description |
+|---|---|
+| `source_number` | Position in retrieval order, starting at 1 |
+| `filename` | Originating document filename |
+| `chunk_id` | Unique chunk identifier |
+| `document_id` | Parent document identifier |
+| `chunk_index` | Position of this chunk within the document |
+| `similarity_score` | Cosine similarity score [0, 1] |
+| `content_preview` | First 300 characters of the chunk text |
+
+The `sources` field is retained unchanged (200-character preview) for backward compatibility.
+
+**Limitation:** In this release, `citations` is derived directly from retrieved chunks rather than parsed from the generated answer. The model is instructed to cite only from the provided context, but whether each `[Source N]` in the answer exactly matches the citation list is not validated. Parsing and cross-referencing inline citations is planned for a future release.
+
 ## Endpoints
 
 | Method | Path | Description |
@@ -527,4 +570,5 @@ ORDER BY created_at DESC;
 | PR 6 | Embeddings with sentence-transformers + ChromaDB storage |
 | PR 7 | Semantic retrieval with ChromaDB vector search |
 | PR 8 | Grounded answer generation via local Ollama |
-| PR 9 (this) | Conversation history, multi-turn chat sessions |
+| PR 9 | Conversation history, multi-turn chat sessions |
+| PR 10 (this) | Structured source citations, citation rules in prompt |

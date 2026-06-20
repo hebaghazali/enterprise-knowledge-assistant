@@ -74,6 +74,10 @@ async def answer(
             "k": body.k,
             "source_chunk_ids": [s.chunk_id for s in result.sources] if result else [],
             "source_document_ids": [s.document_id for s in result.sources] if result else [],
+            "citations": [
+                {"source_number": c.source_number, "chunk_id": c.chunk_id, "filename": c.filename}
+                for c in result.citations
+            ] if result else [],
         },
     )
     db.add(llm_run)
@@ -88,6 +92,7 @@ async def answer(
     return AnswerResponse(
         question=body.question,
         answer=result.answer,
+        citations=result.citations,
         sources=result.sources,
         model=settings.ollama_model,
         k=body.k,

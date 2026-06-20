@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.db.models import LLMRun
 from app.db.session import get_db_session
 from app.main import app
-from app.schemas.answering import AnswerSourceResponse
+from app.schemas.answering import AnswerSourceResponse, CitationResponse
 from app.schemas.retrieval import SearchResultResponse
 from app.services.answering import AnswerResult, RetrievalEmptyError
 from app.services.llm import OllamaUnavailableError, call_ollama
@@ -38,12 +38,23 @@ _FAKE_SOURCE = AnswerSourceResponse(
     content_preview="Employees may work remotely up to three days per week.",
 )
 
-_FAKE_ANSWER_TEXT = "Employees may work remotely up to three days per week."
+_FAKE_CITATION = CitationResponse(
+    source_number=1,
+    chunk_id="chunk-1",
+    document_id="doc-1",
+    filename="handbook.txt",
+    chunk_index=0,
+    similarity_score=0.9,
+    content_preview="Employees may work remotely up to three days per week.",
+)
+
+_FAKE_ANSWER_TEXT = "Employees may work remotely up to three days per week. [Source 1]"
 
 _FAKE_RESULT = AnswerResult(
     answer=_FAKE_ANSWER_TEXT,
     prompt="the full prompt",
     sources=[_FAKE_SOURCE],
+    citations=[_FAKE_CITATION],
     latency_ms=350,
 )
 
@@ -446,3 +457,132 @@ def test_answer_llm_run_logged_even_on_404(mock_gen, mock_count):
         assert llm_run.status == "failed"
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Prompt builder — citation rules
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_includes_citation_rules():
+    prompt = build_prompt("remote work?", [_FAKE_CHUNK])
+    assert "Citation rules:" in prompt
+    assert "[Source N]" in prompt
+
+
+def test_prompt_citation_rules_include_only_cite_retrieved():
+    prompt = build_prompt("remote work?", [_FAKE_CHUNK])
+    assert "Only cite sources that appear in the provided context" in prompt
+
+
+def test_prompt_citation_rules_include_dont_know_no_citation():
+    prompt = build_prompt("remote work?", [_FAKE_CHUNK])
+    assert 'Do not add citations to the "I don\'t know" response' in prompt
+
+
+def test_prompt_citation_rules_appear_before_question():
+    prompt = build_prompt("remote work?", [_FAKE_CHUNK])
+    citation_pos = prompt.index("Citation rules:")
+    question_pos = prompt.index("Question:")
+    assert citation_pos < question_pos
+
+
+# ---------------------------------------------------------------------------
+# /answer — citations in response
+# ---------------------------------------------------------------------------
+
+
+@patch("app.api.routes.answer.count_query_tokens", return_value=10)
+@patch("app.api.routes.answer.generate_answer", new_callable=AsyncMock)
+def test_answer_citations_included(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        response = client.post("/answer", json={"question": "remote days?", "k": 5})
+        assert response.status_code == 200
+        data = response.json()
+        assert "citations" in data
+        assert len(data["citations"]) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.answer.count_query_tokens", return_value=10)
+@patch("app.api.routes.answer.generate_answer", new_callable=AsyncMock)
+def test_answer_citation_fields(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        data = client.post("/answer", json={"question": "remote days?", "k": 5}).json()
+        cit = data["citations"][0]
+        assert cit["source_number"] == 1
+        assert cit["chunk_id"] == "chunk-1"
+        assert cit["document_id"] == "doc-1"
+        assert cit["filename"] == "handbook.txt"
+        assert cit["chunk_index"] == 0
+        assert cit["similarity_score"] == 0.9
+        assert "content_preview" in cit
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.answer.count_query_tokens", return_value=10)
+@patch("app.api.routes.answer.generate_answer", new_callable=AsyncMock)
+def test_answer_sources_still_present_with_citations(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        data = client.post("/answer", json={"question": "remote days?", "k": 5}).json()
+        assert "sources" in data
+        assert len(data["sources"]) == 1
+        assert "citations" in data
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("app.api.routes.answer.count_query_tokens", return_value=10)
+@patch("app.api.routes.answer.generate_answer", new_callable=AsyncMock)
+def test_answer_llm_run_metadata_includes_citations(mock_gen, mock_count):
+    mock_gen.return_value = _FAKE_RESULT
+    mock_db = _make_mock_db()
+
+    app.dependency_overrides[get_db_session] = _db_override(mock_db)
+    try:
+        client.post("/answer", json={"question": "remote days?", "k": 3})
+        llm_run = mock_db.add.call_args[0][0]
+        assert "citations" in llm_run.run_metadata
+        citations_meta = llm_run.run_metadata["citations"]
+        assert len(citations_meta) == 1
+        assert citations_meta[0]["source_number"] == 1
+        assert citations_meta[0]["chunk_id"] == "chunk-1"
+        assert citations_meta[0]["filename"] == "handbook.txt"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Citation builder — unit tests (via generate_answer service)
+# ---------------------------------------------------------------------------
+
+
+def test_citation_source_number_starts_at_one():
+    assert _FAKE_CITATION.source_number == 1
+
+
+def test_citation_preserves_chunk_metadata():
+    assert _FAKE_CITATION.chunk_id == "chunk-1"
+    assert _FAKE_CITATION.document_id == "doc-1"
+    assert _FAKE_CITATION.filename == "handbook.txt"
+    assert _FAKE_CITATION.chunk_index == 0
+    assert _FAKE_CITATION.similarity_score == 0.9
+
+
+def test_citation_preview_is_string():
+    assert isinstance(_FAKE_CITATION.content_preview, str)
+    assert len(_FAKE_CITATION.content_preview) > 0

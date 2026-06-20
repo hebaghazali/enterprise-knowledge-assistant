@@ -170,6 +170,10 @@ async def send_message(
             "k": body.k,
             "source_chunk_ids": [s.chunk_id for s in result.sources] if result else [],
             "source_document_ids": [s.document_id for s in result.sources] if result else [],
+            "citations": [
+                {"source_number": c.source_number, "chunk_id": c.chunk_id, "filename": c.filename}
+                for c in result.citations
+            ] if result else [],
         },
     ))
 
@@ -185,5 +189,6 @@ async def send_message(
         conversation_id=str(conversation_id),
         message_id=str(assistant_msg_id),
         answer=result.answer,
+        citations=result.citations,
         sources=result.sources,
     )

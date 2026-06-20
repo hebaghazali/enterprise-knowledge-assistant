@@ -15,9 +15,20 @@ class AnswerSourceResponse(BaseModel):
     content_preview: str
 
 
+class CitationResponse(BaseModel):
+    source_number: int
+    chunk_id: str
+    document_id: str
+    filename: str
+    chunk_index: int
+    similarity_score: float
+    content_preview: str
+
+
 class AnswerResponse(BaseModel):
     question: str
     answer: str
+    citations: list[CitationResponse]
     sources: list[AnswerSourceResponse]
     model: str
     k: int

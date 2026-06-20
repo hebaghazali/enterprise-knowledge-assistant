@@ -36,6 +36,11 @@ def build_prompt(
         "- Do not invent facts, policies, numbers, names, or procedures.\n"
         "- Keep the answer concise and direct.\n"
         "- Prefer the most relevant context when multiple chunks overlap.\n\n"
+        "Citation rules:\n"
+        "- When you use information from a source, cite it inline using [Source N].\n"
+        "- Only cite sources that appear in the provided context.\n"
+        "- Do not cite sources that are not relevant to the answer.\n"
+        '- Do not add citations to the "I don\'t know" response.\n\n'
         f"{history_section}"
         f"Question:\n{question}\n\n"
         f"Context:\n{context}\n\n"
