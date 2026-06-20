@@ -11,14 +11,18 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 8)
+## Current scope (PR 9)
 
-Single-turn grounded answer generation via Ollama:
+Multi-turn conversational RAG using persistent conversation history:
 
-- **`POST /answer`** — accepts a question, retrieves top-k relevant chunks, builds a grounded prompt, calls a local Ollama model, returns the answer with source citations
-- Every answer request is logged in the `llm_runs` table (provider, model, prompt, response, latency, status)
+- **`POST /conversations`** — create a new conversation session
+- **`GET /conversations/{id}`** — retrieve conversation metadata and full message history
+- **`POST /conversations/{id}/messages`** — send a message; retrieves relevant chunks, builds a history-aware prompt, calls Ollama, stores both user and assistant messages, returns grounded answer with sources
+- Conversation history (last 10 messages) is injected into the prompt before the retrieved context
+- Every answer is logged in `llm_runs` linked to its `conversation_id`
 - All previous endpoints remain unchanged
 
+PR 8: Grounded answer generation via Ollama with `POST /answer`.
 PR 7: Semantic retrieval with `GET /search`, vector indexing with ChromaDB.
 PR 6: Embeddings with sentence-transformers + ChromaDB storage.
 PR 5: Text chunking, chunk persistence in PostgreSQL.
@@ -328,11 +332,10 @@ Expected response:
 
 ### Notes
 
-- This is **single-turn Q&A only** — no conversation history.
 - **Streaming is not implemented** — the full answer is returned in one response.
 - Answers are **grounded in retrieved chunks** — the model is blocked from inventing facts.
 - Every request is logged in the `llm_runs` table for observability.
-- Conversation history will be added in a later PR.
+- For multi-turn conversations use the `/conversations` endpoints below.
 
 ### Docker note
 
@@ -394,6 +397,105 @@ Similarity scores use `1 / (1 + distance)` — range [0, 1], higher means more s
 
 This PR implements retrieval only. It does NOT generate answers.
 
+## Conversation Support
+
+Conversations persist multi-turn chat history. Each new message loads the last 10 messages from the conversation, injects them into the prompt, and generates an answer grounded in retrieved document chunks.
+
+### Create a conversation
+
+```bash
+curl -X POST http://localhost:8000/conversations
+```
+
+Response:
+
+```json
+{
+  "conversation_id": "...",
+  "created_at": "2026-06-20T12:00:00Z"
+}
+```
+
+### Send a message
+
+```bash
+curl -X POST http://localhost:8000/conversations/<conversation-id>/messages \
+  -H "Content-Type: application/json" \
+  -d "{\"message\": \"How many remote days are employees allowed?\", \"k\": 5}"
+```
+
+Response:
+
+```json
+{
+  "conversation_id": "...",
+  "message_id": "...",
+  "answer": "Employees may work remotely up to three days per week.",
+  "sources": [
+    {
+      "chunk_id": "...",
+      "document_id": "...",
+      "filename": "novatech_enterprise_handbook.txt",
+      "chunk_index": 1,
+      "similarity_score": 0.8421,
+      "content_preview": "REMOTE WORK POLICY\n\nEmployees may work remotely..."
+    }
+  ]
+}
+```
+
+### Retrieve conversation history
+
+```bash
+curl http://localhost:8000/conversations/<conversation-id>
+```
+
+Response:
+
+```json
+{
+  "conversation_id": "...",
+  "created_at": "...",
+  "messages": [
+    {"message_id": "...", "role": "user", "content": "How many remote days?", "created_at": "..."},
+    {"message_id": "...", "role": "assistant", "content": "Three days per week.", "created_at": "..."}
+  ]
+}
+```
+
+### How it works
+
+```
+POST /conversations/{id}/messages
+  ↓  validate message (400/422)
+  ↓  look up conversation (404 if missing)
+  ↓  load last 10 messages as history
+  ↓  store user message
+  ↓  retrieve top-k chunks from ChromaDB
+  ↓  build prompt: system rules + conversation history + question + context
+  ↓  call Ollama
+  ↓  store assistant message
+  ↓  log llm_run (linked to conversation_id)
+  ↓  return answer + sources
+```
+
+The prompt places conversation history after the grounding rules and before the retrieved context. The model is still instructed to answer only from retrieved chunks — history provides conversational continuity, not a second knowledge source.
+
+### Verify conversation logging
+
+```sql
+SELECT c.id, COUNT(m.id) AS message_count
+FROM conversations c
+LEFT JOIN messages m ON m.conversation_id = c.id
+GROUP BY c.id
+ORDER BY c.created_at DESC;
+
+SELECT conversation_id, status, latency_ms
+FROM llm_runs
+WHERE conversation_id IS NOT NULL
+ORDER BY created_at DESC;
+```
+
 ## Endpoints
 
 | Method | Path | Description |
@@ -408,7 +510,10 @@ This PR implements retrieval only. It does NOT generate answers.
 | GET | `/documents/{id}` | Get document metadata by UUID |
 | GET | `/documents` | List all documents |
 | GET | `/search?q=...&k=5` | Semantic search across all indexed chunks |
-| POST | `/answer` | Ask a question — returns grounded answer + sources |
+| POST | `/answer` | Single-turn Q&A — grounded answer + sources (no history) |
+| POST | `/conversations` | Create a new conversation session |
+| GET | `/conversations/{id}` | Retrieve conversation metadata and message history |
+| POST | `/conversations/{id}/messages` | Send a message — history-aware grounded answer + sources |
 
 ## Roadmap
 
@@ -421,5 +526,5 @@ This PR implements retrieval only. It does NOT generate answers.
 | PR 5 | Text chunking, chunk persistence in PostgreSQL |
 | PR 6 | Embeddings with sentence-transformers + ChromaDB storage |
 | PR 7 | Semantic retrieval with ChromaDB vector search |
-| PR 8 (this) | Grounded answer generation via local Ollama |
-| PR 9 | Conversation history, multi-turn chat sessions |
+| PR 8 | Grounded answer generation via local Ollama |
+| PR 9 (this) | Conversation history, multi-turn chat sessions |

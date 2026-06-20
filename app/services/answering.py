@@ -27,13 +27,14 @@ async def generate_answer(
     model: str,
     base_url: str,
     timeout: int,
+    history: list[dict[str, str]] | None = None,
 ) -> AnswerResult:
     chunks = retrieve(question, k)
 
     if not chunks:
         raise RetrievalEmptyError("No relevant chunks found for the given question.")
 
-    prompt = build_prompt(question, chunks)
+    prompt = build_prompt(question, chunks, history=history)
 
     start = time.monotonic()
     answer_text = await call_ollama(prompt, model, base_url, timeout)
