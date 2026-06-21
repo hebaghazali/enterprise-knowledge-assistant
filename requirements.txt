@@ -1,5 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 # Web framework
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
@@ -24,7 +22,10 @@ chromadb>=0.5.0
 # HTTP client (Ollama calls)
 httpx>=0.27.0
 
-# ML / embeddings — CPU-only torch; +cpu suffix is resolved via the extra index above
-torch==2.4.1+cpu
+# ML / embeddings
+# torch is pre-installed by the Dockerfile with platform-specific logic (see TARGETARCH step).
+# This entry covers local `pip install -r requirements.txt` and ensures pip won't downgrade
+# a Docker-installed wheel that already satisfies this constraint.
+torch>=2.4.1,<3.0.0
 transformers>=4.40.0
 sentence-transformers>=2.7.0

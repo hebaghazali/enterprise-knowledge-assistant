@@ -9,7 +9,7 @@ _model: SentenceTransformer | None = None
 def _get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = SentenceTransformer(get_settings().embedding_model_name)
+        _model = SentenceTransformer(get_settings().embedding_model_name, device="cpu")
     return _model
 
 
