@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as PipelineRouteImport } from './routes/pipeline'
 import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as AskRouteImport } from './routes/ask'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PipelineRoute = PipelineRouteImport.update({
   id: '/pipeline',
   path: '/pipeline',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/ask': typeof AskRoute
   '/documents': typeof DocumentsRoute
   '/pipeline': typeof PipelineRoute
+  '/search': typeof SearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/ask': typeof AskRoute
   '/documents': typeof DocumentsRoute
   '/pipeline': typeof PipelineRoute
+  '/search': typeof SearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,27 @@ export interface FileRoutesById {
   '/ask': typeof AskRoute
   '/documents': typeof DocumentsRoute
   '/pipeline': typeof PipelineRoute
+  '/search': typeof SearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/architecture' | '/ask' | '/documents' | '/pipeline'
+  fullPaths:
+    | '/'
+    | '/architecture'
+    | '/ask'
+    | '/documents'
+    | '/pipeline'
+    | '/search'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/architecture' | '/ask' | '/documents' | '/pipeline'
-  id: '__root__' | '/' | '/architecture' | '/ask' | '/documents' | '/pipeline'
+  to: '/' | '/architecture' | '/ask' | '/documents' | '/pipeline' | '/search'
+  id:
+    | '__root__'
+    | '/'
+    | '/architecture'
+    | '/ask'
+    | '/documents'
+    | '/pipeline'
+    | '/search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,10 +99,18 @@ export interface RootRouteChildren {
   AskRoute: typeof AskRoute
   DocumentsRoute: typeof DocumentsRoute
   PipelineRoute: typeof PipelineRoute
+  SearchRoute: typeof SearchRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pipeline': {
       id: '/pipeline'
       path: '/pipeline'
@@ -125,6 +155,7 @@ const rootRouteChildren: RootRouteChildren = {
   AskRoute: AskRoute,
   DocumentsRoute: DocumentsRoute,
   PipelineRoute: PipelineRoute,
+  SearchRoute: SearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

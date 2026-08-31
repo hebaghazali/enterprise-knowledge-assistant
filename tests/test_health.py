@@ -23,6 +23,18 @@ def test_root_returns_200():
     assert response.status_code == 200
 
 
+def test_local_frontend_origin_is_allowed():
+    response = client.options(
+        "/documents",
+        headers={
+            "Origin": "http://localhost:8080",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:8080"
+
+
 async def _db_ok():
     yield AsyncMock()
 

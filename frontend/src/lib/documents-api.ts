@@ -11,12 +11,43 @@ interface BackendDocListItem {
 }
 
 // POST /documents/upload returns the full document response.
-interface BackendDocResponse extends BackendDocListItem {
+export interface DocumentDetailsResponse extends BackendDocListItem {
   content_type: string | null;
   source_type: string;
   metadata: Record<string, unknown> | null;
   updated_at: string;
   text_length: number | null;
+}
+
+export interface DocumentChunk {
+  id: string;
+  chunk_index: number;
+  content_preview: string;
+  token_count: number | null;
+}
+
+export interface DocumentChunksResponse {
+  document_id: string;
+  chunk_count: number;
+  chunks: DocumentChunk[];
+}
+
+export interface ChunkingSummary {
+  document_id: string;
+  status: "chunked";
+  chunk_count: number;
+  chunk_size: number;
+  chunk_overlap: number;
+}
+
+export interface IndexingSummary {
+  document_id: string;
+  status: "vector_indexed";
+  chunk_count: number;
+  indexed_chunk_count: number;
+  skipped_chunk_count: number;
+  embedding_model: string;
+  chroma_collection: string;
 }
 
 const STATUS_MAP: Record<string, DocStatus> = {
@@ -52,9 +83,37 @@ export async function listDocuments(): Promise<Document[]> {
 export async function uploadDocument(file: File): Promise<Document> {
   const form = new FormData();
   form.append("file", file);
-  const raw = await apiFetch<BackendDocResponse>("/documents/upload", {
+  const raw = await apiFetch<DocumentDetailsResponse>("/documents/upload", {
     method: "POST",
     body: form,
   });
   return toDocument(raw);
+}
+
+export function getDocument(documentId: string): Promise<DocumentDetailsResponse> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}`);
+}
+
+export function getDocumentChunks(documentId: string): Promise<DocumentChunksResponse> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}/chunks`);
+}
+
+export function chunkDocument(
+  documentId: string,
+  chunkSize = 500,
+  chunkOverlap = 50,
+): Promise<ChunkingSummary> {
+  const params = new URLSearchParams({
+    chunk_size: String(chunkSize),
+    chunk_overlap: String(chunkOverlap),
+  });
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}/chunk?${params}`, {
+    method: "POST",
+  });
+}
+
+export function indexDocument(documentId: string): Promise<IndexingSummary> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}/index`, {
+    method: "POST",
+  });
 }

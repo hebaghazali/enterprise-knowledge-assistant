@@ -1,7 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { Upload, FileText, Scissors, Sparkles, Database, Search, MessageSquare, ArrowRight } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Scissors,
+  Sparkles,
+  Database,
+  Search,
+  MessageSquare,
+  ArrowRight,
+} from "lucide-react";
 
 export const Route = createFileRoute("/pipeline")({
   head: () => ({ meta: [{ title: "Pipeline — Enterprise Knowledge Assistant" }] }),
@@ -9,13 +18,48 @@ export const Route = createFileRoute("/pipeline")({
 });
 
 const stages = [
-  { icon: Upload, title: "Upload", body: "PDF, TXT, MD ingested into object storage.", phase: "Ingest" },
-  { icon: FileText, title: "Extract Text", body: "PyMuPDF / unstructured parses pages and metadata.", phase: "Ingest" },
-  { icon: Scissors, title: "Chunk", body: "Recursive splitter with 512-token windows and 64-token overlap.", phase: "Prepare" },
-  { icon: Sparkles, title: "Embed", body: "sentence-transformers/all-MiniLM-L6-v2 to 384-dim vectors.", phase: "Prepare" },
-  { icon: Database, title: "Store", body: "ChromaDB collection per workspace, persisted on disk.", phase: "Prepare" },
-  { icon: Search, title: "Retrieve", body: "Top-k cosine similarity with MMR re-ranking.", phase: "Serve" },
-  { icon: MessageSquare, title: "Generate", body: "LLM call with retrieved context and citation enforcement.", phase: "Serve" },
+  {
+    icon: Upload,
+    title: "Upload",
+    body: "PDF, TXT, and Markdown saved to configured local storage.",
+    phase: "Ingest",
+  },
+  {
+    icon: FileText,
+    title: "Extract Text",
+    body: "UTF-8 decoding and pypdf extract searchable document text.",
+    phase: "Ingest",
+  },
+  {
+    icon: Scissors,
+    title: "Chunk",
+    body: "Token-aware chunks with 500-token windows and 50-token overlap by default.",
+    phase: "Prepare",
+  },
+  {
+    icon: Sparkles,
+    title: "Embed",
+    body: "sentence-transformers/all-MiniLM-L6-v2 to 384-dim vectors.",
+    phase: "Prepare",
+  },
+  {
+    icon: Database,
+    title: "Store",
+    body: "ChromaDB persists vectors in the configured collection.",
+    phase: "Prepare",
+  },
+  {
+    icon: Search,
+    title: "Retrieve",
+    body: "Top-k semantic similarity search over indexed chunks.",
+    phase: "Serve",
+  },
+  {
+    icon: MessageSquare,
+    title: "Generate",
+    body: "LLM call with retrieved context and citation enforcement.",
+    phase: "Serve",
+  },
 ];
 
 const phaseColor: Record<string, string> = {
@@ -38,7 +82,9 @@ function PipelinePage() {
             {stages.map((s, i) => (
               <div key={s.title} className="relative">
                 <div className="rounded-xl border border-border bg-background/40 p-4 h-full">
-                  <div className={`text-[10px] uppercase tracking-widest ${phaseColor[s.phase]}`}>{s.phase}</div>
+                  <div className={`text-[10px] uppercase tracking-widest ${phaseColor[s.phase]}`}>
+                    {s.phase}
+                  </div>
                   <div className="mt-2 grid h-9 w-9 place-items-center rounded-md bg-secondary text-primary">
                     <s.icon className="h-4 w-4" />
                   </div>
@@ -50,21 +96,6 @@ function PipelinePage() {
                 )}
               </div>
             ))}
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-border bg-card p-5">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Indexing throughput</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">1.2k <span className="text-sm font-normal text-muted-foreground">chunks/min</span></div>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-5">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Retrieval p95</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">284 <span className="text-sm font-normal text-muted-foreground">ms</span></div>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-5">
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">Groundedness</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">98.2<span className="text-sm font-normal text-muted-foreground">%</span></div>
           </div>
         </div>
       </div>

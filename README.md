@@ -54,7 +54,7 @@ PR 1: FastAPI skeleton, health endpoint, config, tests.
 |---|---|
 | Backend API | http://localhost:8000 |
 | API docs (Swagger) | http://localhost:8000/docs |
-| Frontend | http://localhost:3000 or http://localhost:5173 |
+| Frontend | http://localhost:8080 (use the port printed by Vite) |
 | ChromaDB | http://localhost:8001 |
 | PostgreSQL | localhost:5432 |
 
@@ -78,7 +78,7 @@ bun install
 bun run dev
 ```
 
-The frontend uses TanStack Start with Nitro as the SSR server. The dev server prints the actual port on startup — it is typically `3000` (Nitro default) or `5173` (Vite default).
+The frontend uses TanStack Start with Nitro as the SSR server. The dev server prints the actual port on startup; this project's Lovable Vite configuration currently uses `8080`.
 
 `VITE_API_BASE_URL` in `frontend/.env` controls which backend the frontend calls. The default value (`http://localhost:8000`) points at the Docker Compose backend.
 
