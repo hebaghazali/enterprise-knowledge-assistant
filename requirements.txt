@@ -25,6 +25,6 @@ chromadb>=0.5.0
 httpx>=0.27.0
 
 # ML / embeddings — CPU-only torch; +cpu suffix is resolved via the extra index above
-torch==2.4.1+cpu
+torch==2.6.0
 transformers>=4.40.0
 sentence-transformers>=2.7.0
