@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -210,7 +210,7 @@ def test_chunk_content_separator_lines_removed():
 # ---------------------------------------------------------------------------
 
 _FAKE_PATH = Path("storage/uploads/fake-uuid_test.txt")
-_NOW = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
 
 
 def _make_document(filename: str = "test.txt", ext: str = ".txt") -> Document:
@@ -478,7 +478,8 @@ def test_chunk_invalid_overlap_exceeds_chunk_size():
     assert "chunk_overlap" in response.json()["detail"]
 
 
-def test_chunk_document_success(tmp_path):
+@patch("app.api.routes.documents.delete_chunks_by_document")
+def test_chunk_document_success(mock_cleanup, tmp_path):
     # "hello " * 100 → 100 tokens; chunk_size=60, overlap=10, step=50
     # chunk 0: tokens[0:60]  → 60 tokens, next start=50
     # chunk 1: tokens[50:100] → 50 tokens → 2 chunks
@@ -506,7 +507,8 @@ def test_chunk_document_success(tmp_path):
         app.dependency_overrides.clear()
 
 
-def test_chunk_document_custom_params(tmp_path):
+@patch("app.api.routes.documents.delete_chunks_by_document")
+def test_chunk_document_custom_params(mock_cleanup, tmp_path):
     # "hello " * 30 → 30 tokens; chunk_size=20, overlap=5, step=15
     # chunk 0: tokens[0:20]  → 20 tokens, next start=15
     # chunk 1: tokens[15:30] → 15 tokens → 2 chunks
@@ -532,14 +534,19 @@ def test_chunk_document_custom_params(tmp_path):
         app.dependency_overrides.clear()
 
 
-def test_chunk_document_rechunking_replaces_old_chunks(tmp_path):
+@patch("app.api.routes.documents.delete_chunks_by_document")
+def test_chunk_document_rechunking_replaces_old_chunks(mock_cleanup, tmp_path):
     content = b"Hello world. " * 50  # ~650 bytes
     file_path = tmp_path / "rechunk.txt"
     file_path.write_bytes(content)
 
     doc = _make_document("rechunk.txt", ".txt")
     doc.document_metadata = {**doc.document_metadata, "saved_path": str(file_path)}
-    doc.status = "chunked"
+    doc.status = "vector_indexed"
+    doc.document_metadata = {
+        **doc.document_metadata,
+        "chroma_collection": "enterprise_knowledge_chunks",
+    }
     doc.chunk_count = 99  # stale value — should be replaced
 
     app.dependency_overrides[get_db_session] = _chunk_db_override(doc)
@@ -549,6 +556,9 @@ def test_chunk_document_rechunking_replaces_old_chunks(tmp_path):
         data = response.json()
         assert data["status"] == "chunked"
         assert data["chunk_count"] != 99
+        mock_cleanup.assert_called_once_with(
+            "enterprise_knowledge_chunks", str(doc.id)
+        )
     finally:
         app.dependency_overrides.clear()
 

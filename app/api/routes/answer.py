@@ -1,15 +1,25 @@
+import asyncio
+import time
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.models import LLMRun
 from app.db.session import get_db_session
 from app.schemas.answering import AnswerRequest, AnswerResponse
-from app.services.answering import AnswerResult, RetrievalEmptyError, generate_answer
+from app.services.answering import (
+    AnswerResult,
+    RetrievalEmptyError,
+    generate_answer,
+    prepare_answer,
+)
 from app.services.chunking import count_query_tokens
-from app.services.llm import OllamaUnavailableError
+from app.services.llm import OllamaUnavailableError, stream_ollama
+from app.services.sse import sse_event
 
 router = APIRouter(tags=["answer"])
 
@@ -96,4 +106,109 @@ async def answer(
         sources=result.sources,
         model=settings.ollama_model,
         k=body.k,
+    )
+
+
+@router.post("/answer/stream")
+async def answer_stream(
+    body: AnswerRequest,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> StreamingResponse:
+    settings = get_settings()
+    if not body.question.strip():
+        raise HTTPException(status_code=400, detail="Question must not be empty or whitespace.")
+    if count_query_tokens(body.question) > settings.max_query_tokens:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Question is too long. Maximum allowed query length is {settings.max_query_tokens} tokens.",
+        )
+    try:
+        prompt, sources, citations = prepare_answer(body.question, body.k)
+    except RetrievalEmptyError as exc:
+        raise HTTPException(status_code=404, detail="No relevant chunks found.") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    async def events():
+        run_id = uuid.uuid4()
+        answer_parts: list[str] = []
+        status = "failed"
+        error_message: str | None = None
+        usage: dict[str, int | None] = {"prompt_tokens": None, "output_tokens": None}
+        started = time.monotonic()
+        yield sse_event(
+            "sources",
+            {
+                "sources": [source.model_dump() for source in sources],
+                "citations": [citation.model_dump() for citation in citations],
+            },
+        )
+        try:
+            async for event in stream_ollama(
+                prompt,
+                settings.ollama_model,
+                settings.ollama_base_url,
+                settings.ollama_timeout_seconds,
+            ):
+                if event["type"] == "token":
+                    answer_parts.append(event["text"])
+                    yield sse_event("token", {"text": event["text"]})
+                elif event["type"] == "complete":
+                    usage = {
+                        "prompt_tokens": event.get("prompt_tokens"),
+                        "output_tokens": event.get("output_tokens"),
+                    }
+            status = "success"
+            answer_text = "".join(answer_parts)
+            yield sse_event(
+                "complete",
+                {
+                    "llm_run_id": str(run_id),
+                    "question": body.question,
+                    "answer": answer_text,
+                    "citations": [citation.model_dump() for citation in citations],
+                    "sources": [source.model_dump() for source in sources],
+                    "model": settings.ollama_model,
+                    "k": body.k,
+                    "usage": usage,
+                    "latency_ms": int((time.monotonic() - started) * 1000),
+                },
+            )
+        except asyncio.CancelledError:
+            status = "cancelled"
+            error_message = "Client disconnected."
+            raise
+        except Exception as exc:
+            error_message = str(exc)
+            yield sse_event("error", {"detail": error_message})
+        finally:
+            db.add(
+                LLMRun(
+                    id=run_id,
+                    provider="ollama",
+                    model_name=settings.ollama_model,
+                    prompt=prompt,
+                    response="".join(answer_parts) or None,
+                    input_tokens=usage["prompt_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    status=status,
+                    error_message=error_message,
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                    run_metadata={
+                        "question": body.question,
+                        "k": body.k,
+                        "streamed": True,
+                        "source_chunk_ids": [source.chunk_id for source in sources],
+                    },
+                )
+            )
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

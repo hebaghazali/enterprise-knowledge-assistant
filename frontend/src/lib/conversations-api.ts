@@ -1,5 +1,6 @@
 import { apiFetch } from "./api-client";
 import type { AnswerSource, Citation } from "./answering-api";
+import { postSse, type StreamCallbacks } from "./sse-client";
 
 export interface ConversationCreated {
   conversation_id: string;
@@ -45,4 +46,19 @@ export function sendConversationMessage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, k }),
   });
+}
+
+export function streamConversationMessage(
+  conversationId: string,
+  message: string,
+  k: number,
+  signal: AbortSignal,
+  callbacks: StreamCallbacks,
+): Promise<SendMessageResponse> {
+  return postSse(
+    `/conversations/${encodeURIComponent(conversationId)}/messages/stream`,
+    { message, k },
+    signal,
+    callbacks,
+  );
 }

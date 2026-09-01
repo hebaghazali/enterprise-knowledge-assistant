@@ -1,21 +1,23 @@
 import uuid
+from datetime import UTC
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.models import Document, DocumentChunk
 from app.db.session import get_db_session
-from app.schemas.chunks import ChunkListResponse, ChunkResponse, ChunkingSummaryResponse
+from app.schemas.chunks import ChunkingSummaryResponse, ChunkListResponse, ChunkResponse
 from app.schemas.documents import DocumentListItem, DocumentResponse
 from app.schemas.indexing import IndexingSummaryResponse
 from app.services.chunking import chunk_text
 from app.services.document_storage import save_upload_file
 from app.services.embeddings import embed_texts
 from app.services.text_extraction import SUPPORTED_EXTENSIONS, extract_text
-from app.services.vector_store import upsert_chunks
+from app.services.vector_store import delete_chunks_by_document, upsert_chunks
 
 router = APIRouter(tags=["documents"])
 
@@ -118,10 +120,17 @@ async def chunk_document(
     if not text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in document.")
 
+    metadata = document.document_metadata or {}
+    needs_vector_cleanup = (
+        document.status == "vector_indexed" or bool(metadata.get("chroma_collection"))
+    )
     document.status = "processing"
     await db.commit()
 
     try:
+        settings = get_settings()
+        if needs_vector_cleanup:
+            delete_chunks_by_document(settings.chroma_collection_name, str(document_id))
         await db.execute(
             sa_delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
         )
@@ -139,6 +148,11 @@ async def chunk_document(
 
         document.status = "chunked"
         document.chunk_count = len(text_chunks)
+        document.document_metadata = {
+            key: value
+            for key, value in (document.document_metadata or {}).items()
+            if key not in {"indexed_at", "embedding_model", "chroma_collection"}
+        }
         await db.commit()
 
     except Exception as exc:
@@ -160,7 +174,7 @@ async def index_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
 ) -> IndexingSummaryResponse:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     result = await db.execute(select(Document).where(Document.id == document_id))
     document = result.scalar_one_or_none()
@@ -181,6 +195,8 @@ async def index_document(
         )
 
     settings = get_settings()
+    document.status = "processing"
+    await db.commit()
 
     new_chunks = [
         c for c in chunks
@@ -194,6 +210,8 @@ async def index_document(
         try:
             embeddings = embed_texts(texts)
         except Exception as exc:
+            document.status = "failed"
+            await db.commit()
             raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
 
         ids = [str(chunk.id) for chunk in new_chunks]
@@ -217,6 +235,8 @@ async def index_document(
                 metadatas=metadatas,
             )
         except RuntimeError as exc:
+            document.status = "failed"
+            await db.commit()
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
         for chunk in new_chunks:
@@ -226,11 +246,21 @@ async def index_document(
     document.status = "vector_indexed"
     document.document_metadata = {
         **(document.document_metadata or {}),
-        "indexed_at": datetime.now(timezone.utc).isoformat(),
+        "indexed_at": datetime.now(UTC).isoformat(),
         "embedding_model": settings.embedding_model_name,
         "chroma_collection": settings.chroma_collection_name,
     }
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        current = await db.get(Document, document_id)
+        if current is not None:
+            current.status = "failed"
+            await db.commit()
+        raise HTTPException(
+            status_code=500, detail="Failed to persist indexing state."
+        ) from exc
 
     return IndexingSummaryResponse(
         document_id=document_id,
@@ -293,3 +323,42 @@ async def list_documents(
     result = await db.execute(select(Document).order_by(Document.created_at.desc()))
     documents = result.scalars().all()
     return [DocumentListItem.model_validate(doc) for doc in documents]
+
+
+@router.delete("/{document_id}", status_code=204)
+async def delete_document(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+) -> None:
+    document = await db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if document.status in {"queued", "processing", "deleting"}:
+        raise HTTPException(
+            status_code=409, detail="Document processing or deletion is already active."
+        )
+
+    document.status = "deleting"
+    await db.commit()
+
+    try:
+        settings = get_settings()
+        delete_chunks_by_document(settings.chroma_collection_name, str(document_id))
+
+        saved_path = (document.document_metadata or {}).get("saved_path")
+        if saved_path:
+            file_path = Path(saved_path)
+            if file_path.exists():
+                file_path.unlink()
+
+        await db.delete(document)
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        current = await db.get(Document, document_id)
+        if current is not None:
+            current.status = "delete_failed"
+            await db.commit()
+        if isinstance(exc, RuntimeError):
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Document deletion failed.") from exc

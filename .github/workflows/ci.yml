@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check app tests
+      - run: uv run pytest
+      - run: uv run alembic heads
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: eka_user
+          POSTGRES_PASSWORD: eka_password
+          POSTGRES_DB: eka_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eka_user -d eka_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      chromadb:
+        image: chromadb/chroma:1.5.9
+        ports:
+          - 8001:8000
+    env:
+      DATABASE_URL: postgresql+psycopg://eka_user:eka_password@localhost:5432/eka_db
+      CHROMA_HOST: localhost
+      CHROMA_PORT: 8001
+      CHROMA_COLLECTION_NAME: eka_ci_pipeline
+      UPLOAD_DIR: /tmp/eka-integration-uploads
+      RUN_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run alembic upgrade head
+      - name: Wait for ChromaDB
+        run: |
+          for attempt in {1..30}; do
+            if uv run python -c "import chromadb; chromadb.HttpClient(host='localhost', port=8001).heartbeat()"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - run: uv run pytest tests/integration/test_pipeline.py
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+      - run: docker compose -f docker-compose.yml -f docker-compose.ollama.yml config --quiet
+      - run: docker compose -f docker-compose.yml -f docker-compose.ollama.yml -f docker-compose.ollama.dev.yml config --quiet

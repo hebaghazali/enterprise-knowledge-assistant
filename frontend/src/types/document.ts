@@ -1,5 +1,6 @@
 export type DocStatus =
   | "Uploaded"
+  | "Queued"
   | "Processing"
   | "Chunked"
   | "Vector Indexed"

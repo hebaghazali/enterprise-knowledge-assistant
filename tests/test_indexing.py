@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -13,7 +13,7 @@ from app.services.embeddings import embed_text, embed_texts
 
 client = TestClient(app)
 
-_NOW = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -317,6 +317,7 @@ def test_index_document_chroma_unavailable(mock_upsert, mock_embed):
         response = client.post(f"/documents/{doc.id}/index")
         assert response.status_code == 503
         assert "ChromaDB" in response.json()["detail"]
+        assert doc.status == "failed"
     finally:
         app.dependency_overrides.clear()
 

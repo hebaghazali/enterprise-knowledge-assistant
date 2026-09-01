@@ -5,13 +5,28 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, FileText, Hash, MessageSquarePlus, Send, Sparkles } from "lucide-react";
-import { askQuestion, type AnswerResponse, type AnswerSource } from "@/lib/answering-api";
+import {
+  AlertCircle,
+  FileText,
+  Hash,
+  MessageSquarePlus,
+  Send,
+  Sparkles,
+  StopCircle,
+} from "lucide-react";
+import {
+  askQuestion,
+  streamAnswer,
+  type AnswerResponse,
+  type AnswerSource,
+  type Citation,
+} from "@/lib/answering-api";
 import { ApiError } from "@/lib/api-client";
 import {
   createConversation,
   getConversation,
   sendConversationMessage,
+  streamConversationMessage,
   type SendMessageResponse,
 } from "@/lib/conversations-api";
 
@@ -132,7 +147,12 @@ function AskPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [storageRestored, setStorageRestored] = useState(false);
   const [latestChatAnswer, setLatestChatAnswer] = useState<SendMessageResponse | null>(null);
+  const [streamingQuick, setStreamingQuick] = useState<AnswerResponse | null>(null);
+  const [streamingChat, setStreamingChat] = useState<SendMessageResponse | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const quickAbortRef = useRef<AbortController | null>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
+  const streamingDisabled = import.meta.env.VITE_DISABLE_STREAMING === "true";
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -164,7 +184,33 @@ function AskPage() {
   }, [conversation.error]);
 
   const quickAnswer = useMutation({
-    mutationFn: ({ question, k }: { question: string; k: number }) => askQuestion(question, k),
+    mutationFn: async ({ question, k }: { question: string; k: number }) => {
+      if (streamingDisabled) return askQuestion(question, k);
+      const controller = new AbortController();
+      quickAbortRef.current = controller;
+      setStreamingQuick({ question, answer: "", citations: [], sources: [], model: "…", k });
+      return streamAnswer(question, k, controller.signal, {
+        onSources: (data) =>
+          setStreamingQuick((current) =>
+            current
+              ? {
+                  ...current,
+                  sources: (data.sources ?? []) as AnswerSource[],
+                  citations: (data.citations ?? []) as Citation[],
+                }
+              : current,
+          ),
+        onToken: (text) =>
+          setStreamingQuick((current) =>
+            current ? { ...current, answer: current.answer + text } : current,
+          ),
+      });
+    },
+    onSuccess: () => setStreamingQuick(null),
+    onError: () => setStreamingQuick(null),
+    onSettled: () => {
+      quickAbortRef.current = null;
+    },
   });
 
   const chatSend = useMutation({
@@ -177,20 +223,52 @@ function AskPage() {
         setConversationId(id);
         window.localStorage.setItem(STORAGE_KEY, id);
       }
-      const response = await sendConversationMessage(id, message, k);
+      if (streamingDisabled) {
+        const response = await sendConversationMessage(id, message, k);
+        return { id, response };
+      }
+      const controller = new AbortController();
+      chatAbortRef.current = controller;
+      setStreamingChat({
+        conversation_id: id,
+        message_id: "streaming",
+        answer: "",
+        citations: [],
+        sources: [],
+      });
+      const response = await streamConversationMessage(id, message, k, controller.signal, {
+        onSources: (data) =>
+          setStreamingChat((current) =>
+            current
+              ? {
+                  ...current,
+                  sources: (data.sources ?? []) as AnswerSource[],
+                  citations: (data.citations ?? []) as Citation[],
+                }
+              : current,
+          ),
+        onToken: (text) =>
+          setStreamingChat((current) =>
+            current ? { ...current, answer: current.answer + text } : current,
+          ),
+      });
       return { id, response };
     },
     onSuccess: ({ response }) => {
       setLatestChatAnswer(response);
+      setStreamingChat(null);
       setChatMessage("");
     },
+    onError: () => setStreamingChat(null),
     onSettled: async (data) => {
+      chatAbortRef.current = null;
       const id = data?.id ?? conversationIdRef.current;
       if (id) await queryClient.invalidateQueries({ queryKey: ["conversation", id] });
     },
   });
 
   const submitQuick = (text?: string) => {
+    if (quickAnswer.isPending) return;
     const question = (text ?? quickQuestion).trim();
     if (!question) return;
     setQuickQuestion(question);
@@ -198,6 +276,7 @@ function AskPage() {
   };
 
   const submitChat = () => {
+    if (chatSend.isPending) return;
     const message = chatMessage.trim();
     if (message) chatSend.mutate({ message, k });
   };
@@ -208,6 +287,7 @@ function AskPage() {
     conversationIdRef.current = null;
     setConversationId(null);
     setLatestChatAnswer(null);
+    setStreamingChat(null);
     setChatMessage("");
   };
 
@@ -247,9 +327,19 @@ function AskPage() {
                 placeholder="Ask a question about your knowledge base…"
                 className="min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-muted-foreground"
               />
-              <Button type="submit" disabled={!quickQuestion.trim() || quickAnswer.isPending}>
-                <Send /> {quickAnswer.isPending ? "Thinking…" : "Ask"}
-              </Button>
+              {quickAnswer.isPending ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => quickAbortRef.current?.abort()}
+                >
+                  <StopCircle /> Stop
+                </Button>
+              ) : (
+                <Button type="submit" disabled={!quickQuestion.trim()}>
+                  <Send /> Ask
+                </Button>
+              )}
             </form>
             {!quickAnswer.data && !quickAnswer.isPending && (
               <div className="flex flex-wrap gap-2">
@@ -265,7 +355,9 @@ function AskPage() {
               </div>
             )}
             {quickAnswer.isError && <ErrorMessage error={quickAnswer.error} />}
-            {quickAnswer.data && <AnswerCard answer={quickAnswer.data} />}
+            {(streamingQuick ?? quickAnswer.data) && (
+              <AnswerCard answer={(streamingQuick ?? quickAnswer.data)!} />
+            )}
           </TabsContent>
 
           <TabsContent value="chat" className="space-y-4">
@@ -324,8 +416,15 @@ function AskPage() {
                     </div>
                   </div>
                   <div className="flex justify-start">
-                    <div className="rounded-xl border border-border bg-background/50 px-4 py-3 text-sm text-muted-foreground">
-                      Generating a grounded answer…
+                    <div className="max-w-[85%] rounded-xl border border-border bg-background/50 px-4 py-3 text-sm">
+                      <p className="whitespace-pre-wrap leading-relaxed text-foreground">
+                        {streamingChat?.answer || "Generating a grounded answer…"}
+                      </p>
+                      {streamingChat && streamingChat.sources.length > 0 && (
+                        <div className="mt-4 border-t border-border pt-3">
+                          <SourceList sources={streamingChat.sources} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -346,9 +445,19 @@ function AskPage() {
                 placeholder="Continue the conversation…"
                 className="min-w-0 flex-1 bg-transparent px-3 py-2 outline-none placeholder:text-muted-foreground"
               />
-              <Button type="submit" disabled={!chatMessage.trim() || chatSend.isPending}>
-                <Send /> Send
-              </Button>
+              {chatSend.isPending ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => chatAbortRef.current?.abort()}
+                >
+                  <StopCircle /> Stop
+                </Button>
+              ) : (
+                <Button type="submit" disabled={!chatMessage.trim()}>
+                  <Send /> Send
+                </Button>
+              )}
             </form>
           </TabsContent>
         </Tabs>

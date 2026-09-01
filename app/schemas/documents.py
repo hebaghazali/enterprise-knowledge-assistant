@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -8,12 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 class DocumentResponse(BaseModel):
     id: uuid.UUID
     filename: str
-    content_type: Optional[str] = None
+    content_type: str | None = None
     source_type: str
     status: str
     chunk_count: int
     # document_metadata is the ORM attribute; expose as "metadata" in the API.
-    metadata: Optional[dict] = Field(None, validation_alias="document_metadata")
+    metadata: dict | None = Field(None, validation_alias="document_metadata")
     created_at: datetime
     updated_at: datetime
 
@@ -21,7 +20,7 @@ class DocumentResponse(BaseModel):
 
     @computed_field
     @property
-    def text_length(self) -> Optional[int]:
+    def text_length(self) -> int | None:
         if self.metadata:
             return self.metadata.get("text_length")
         return None

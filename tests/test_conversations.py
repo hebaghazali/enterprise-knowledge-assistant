@@ -1,8 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.db.models import Conversation, LLMRun, Message
@@ -21,7 +20,7 @@ client = TestClient(app)
 # ---------------------------------------------------------------------------
 
 _CONV_ID = uuid.uuid4()
-_CREATED_AT = datetime(2026, 6, 20, 12, 0, 0, tzinfo=timezone.utc)
+_CREATED_AT = datetime(2026, 6, 20, 12, 0, 0, tzinfo=UTC)
 
 _FAKE_CHUNK = SearchResultResponse(
     chunk_id="chunk-1",

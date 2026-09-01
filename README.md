@@ -1,8 +1,8 @@
 # Enterprise Knowledge Assistant
 
-A local-first, zero-cost Generative AI backend that lets you upload documents and ask questions against them using a fully local stack — no cloud APIs, no per-token costs.
+A local-first, zero-cost knowledge assistant that lets you upload documents and ask cited questions using a fully local stack — no cloud APIs or per-token costs.
 
-## What this project does (eventually)
+## What this project does
 
 - Accept document uploads (PDF, text, etc.)
 - Chunk and embed documents using local sentence-transformers
@@ -11,28 +11,17 @@ A local-first, zero-cost Generative AI backend that lets you upload documents an
 - Use a locally running LLM via Ollama for generation
 - Expose a conversational REST API via FastAPI
 
-## Current scope (PR 10)
+## Current capabilities
 
-Structured source citations in grounded answers:
+- Upload, delete, chunk, and index PDF, Markdown, and text documents.
+- Durable PostgreSQL-backed ingestion jobs with progress and retry.
+- Semantic retrieval through sentence-transformers and ChromaDB.
+- Buffered and streaming grounded answers through local Ollama.
+- Persistent multi-turn conversations and structured source citations.
+- Dependency-level readiness checks and read-only model visibility.
+- A containerized frontend and same-origin private-LAN gateway.
 
-- Prompt instructs the local LLM to cite facts inline using `[Source 1]`, `[Source 2]`, etc.
-- `/answer` and `/conversations/{id}/messages` responses include a structured `citations` array
-- Each citation carries `source_number`, `filename`, `chunk_id`, `document_id`, `chunk_index`, `similarity_score`, and a 300-character `content_preview`
-- `sources` remains unchanged for backward compatibility (200-character preview)
-- `llm_runs.run_metadata` now includes a `citations` summary (source number, chunk ID, filename)
-- All previous endpoints and response fields remain unchanged
-
-PR 9: Multi-turn conversational RAG with persistent conversation history.
-PR 8: Grounded answer generation via Ollama with `POST /answer`.
-PR 7: Semantic retrieval with `GET /search`, vector indexing with ChromaDB.
-PR 6: Embeddings with sentence-transformers + ChromaDB storage.
-PR 5: Text chunking, chunk persistence in PostgreSQL.
-PR 4: Document upload, text extraction, file storage.
-PR 3: Database models, SQLAlchemy, Alembic migrations.
-PR 2: Docker Compose for API, PostgreSQL, ChromaDB.
-PR 1: FastAPI skeleton, health endpoint, config, tests.
-
-## Planned tech stack
+## Tech stack
 
 | Layer | Tool |
 |---|---|
@@ -42,29 +31,69 @@ PR 1: FastAPI skeleton, health endpoint, config, tests.
 | LLM | Ollama (local) |
 | Embeddings | sentence-transformers |
 | ORM | SQLAlchemy + Alembic |
-| Orchestration | LangChain |
+| Job queue | PostgreSQL (`SKIP LOCKED`) |
 | Containerisation | Docker Compose |
 | Testing | pytest + httpx |
 
 ## Local development
 
-### Ports
+### Unified local stack
+
+Native Ollama is recommended on macOS so it can use Apple hardware acceleration:
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+cp .env.example .env
+docker compose up --build
+```
+
+Open `http://localhost:8080`. The API and Swagger UI are available through
+`http://localhost:8080/api` and `http://localhost:8080/api/docs`.
+
+For a lighter model, run `ollama pull llama3.2:3b` and set
+`OLLAMA_MODEL=llama3.2:3b` in `.env`.
+
+On Linux, make the native Ollama listener reachable from Docker by starting it
+with `OLLAMA_HOST=0.0.0.0:11434` on a trusted machine.
+
+### Docker-managed Ollama
+
+The project never downloads a model implicitly. Start Ollama, explicitly pull
+the configured model, then start the complete stack:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d ollama
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml --profile tools run --rm ollama-pull
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml up --build
+```
+
+### Development ports
+
+The base stack exposes only the gateway. Add the development override when
+direct access to service ports is useful:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
 
 | Service | URL |
 |---|---|
-| Backend API | http://localhost:8000 |
+| Unified app | http://localhost:8080 |
+| Backend API (development override) | http://localhost:8000 |
 | API docs (Swagger) | http://localhost:8000/docs |
-| Frontend | http://localhost:8080 (use the port printed by Vite) |
-| ChromaDB | http://localhost:8001 |
-| PostgreSQL | localhost:5432 |
+| Frontend (development override) | http://localhost:3000 |
+| ChromaDB (development override) | http://localhost:8001 |
+| PostgreSQL (development override) | localhost:5432 |
 
-### Backend (Docker — recommended)
+### Backend development
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 ### Frontend (local Vite/Nitro dev server)
@@ -78,11 +107,13 @@ bun install
 bun run dev
 ```
 
-The frontend uses TanStack Start with Nitro as the SSR server. The dev server prints the actual port on startup; this project's Lovable Vite configuration currently uses `8080`.
+The frontend uses TanStack Start with Nitro as the SSR server. The development
+server prints its actual port on startup.
 
 `VITE_API_BASE_URL` in `frontend/.env` controls which backend the frontend calls. The default value (`http://localhost:8000`) points at the Docker Compose backend.
 
-Run database migrations (in a second terminal after `docker compose up`):
+Compose runs database migrations automatically before starting the API and worker.
+To apply migrations manually during backend-only development:
 
 ```bash
 docker compose exec api alembic upgrade head
@@ -94,6 +125,9 @@ Test the running API:
 curl http://localhost:8000/
 curl http://localhost:8000/health
 curl http://localhost:8000/health/db
+curl http://localhost:8000/health/chroma
+curl http://localhost:8000/health/ollama
+curl http://localhost:8000/health/ready
 ```
 
 ## Document upload
@@ -149,8 +183,8 @@ Example using the handbook:
 curl -X POST http://localhost:8000/documents/upload \
   -F "file=@samples/novatech_enterprise_handbook.txt"
 
-curl -X POST http://localhost:8000/documents/<returned-id>/chunk
-curl -X POST http://localhost:8000/documents/<returned-id>/index
+curl -X POST http://localhost:8000/documents/<returned-id>/process
+curl http://localhost:8000/jobs/<returned-job-id>
 
 curl "http://localhost:8000/search?q=remote+work+policy&k=3"
 
@@ -158,6 +192,11 @@ curl -X POST http://localhost:8000/answer \
   -H "Content-Type: application/json" \
   -d "{\"question\":\"How many remote days per week are employees allowed?\",\"k\":5}"
 ```
+
+The `process` endpoint is the normal path. It returns HTTP 202 and the worker
+durably moves the job through `extracting`, `chunking`, `embedding`,
+`indexing`, and `completed`. The separate `/chunk` and `/index` endpoints are
+retained for compatibility and troubleshooting.
 
 ## Chunking
 
@@ -240,36 +279,51 @@ Expected after indexing: `status = vector_indexed`.
 
 > If you change the chunking or cleanup logic and want to fully re-embed existing documents, re-run `/chunk` (which deletes and regenerates chunks, clearing their `chroma_id`) before re-indexing — otherwise indexing will skip chunks it already considers up to date.
 
-Stop services:
+## Private-LAN operation and storage
+
+The gateway is suitable for a trusted private network only. It does not add
+authentication or public TLS. Other devices on the LAN can use
+`http://<host-ip>:8080`; do not expose that port to the public internet.
+
+Persistent state is stored in these locations:
+
+| Data | Location |
+|---|---|
+| Uploaded source files | `storage/uploads/` on the host |
+| PostgreSQL records | `postgres_data` Docker volume |
+| Chroma vectors | `chroma_data` Docker volume |
+| Embedding model cache | `hf_cache` Docker volume |
+| Docker-managed Ollama models | `ollama_data` Docker volume |
+
+For a consistent backup, stop the API and worker, dump PostgreSQL with
+`pg_dump`, copy `storage/uploads/`, and snapshot the named Chroma and Ollama
+volumes. The database, uploaded files, and vector store belong to one logical
+backup and should be restored together.
+
+Stop services without deleting data:
 
 ```bash
-docker compose down        # stop containers
-docker compose down -v     # stop and delete volumes
+docker compose down
 ```
+
+To permanently remove PostgreSQL, Chroma, and model-cache volumes, use
+`docker compose down -v`. Add both Ollama Compose files when removing the
+Docker-managed Ollama volume. This cannot be undone without a backup.
 
 ## Local setup (without Docker)
 
-**With pip:**
+`pyproject.toml` and `uv.lock` are the authoritative Python dependency files.
+Install the locked development environment with uv:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-cp .env.example .env
-```
-
-**With uv (faster):**
-
-```bash
-uv venv
-uv pip install -e ".[dev]"
+uv sync --frozen --extra dev
 cp .env.example .env
 ```
 
 Run the API:
 
 ```bash
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`.
@@ -279,7 +333,7 @@ Interactive docs: `http://localhost:8000/docs`
 ## Running tests
 
 ```bash
-pytest
+uv run --frozen --extra dev pytest
 ```
 
 ## Database migrations
@@ -364,14 +418,17 @@ Expected response:
 
 ### Notes
 
-- **Streaming is not implemented** — the full answer is returned in one response.
+- `/answer` remains available for buffered responses; `/answer/stream` sends
+  `sources`, `token`, `complete`, and `error` SSE events over a POST response.
 - Answers are **grounded in retrieved chunks** — the model is blocked from inventing facts.
 - Every request is logged in the `llm_runs` table for observability.
 - For multi-turn conversations use the `/conversations` endpoints below.
 
 ### Docker note
 
-When running via Docker Compose, Ollama must be running on the host machine. The API container is pre-configured to reach it at `http://host.docker.internal:11434`.
+The base Compose file reaches a native host Ollama at
+`http://host.docker.internal:11434`. Add `docker-compose.ollama.yml` to run
+Ollama in Docker instead. In both cases, model pulls are explicit.
 
 ### Verify LLM run logging
 
@@ -426,8 +483,6 @@ Example response:
 Similarity scores use `1 / (1 + distance)` — range [0, 1], higher means more similar.
 
 **Query length limit:** Queries are embedded directly as a single vector. The MVP intentionally rejects very long pasted prompts (default maximum: 512 tokens) with a `422` error rather than silently truncating or chunking them. The limit is configurable via `MAX_QUERY_TOKENS` in `.env`. Future versions may support query decomposition or multi-query retrieval for longer inputs.
-
-This PR implements retrieval only. It does NOT generate answers.
 
 ## Conversation Support
 
@@ -566,29 +621,34 @@ The `sources` field is retained unchanged (200-character preview) for backward c
 | GET | `/` | Project info |
 | GET | `/health` | App process health (no DB dependency) |
 | GET | `/health/db` | Database connectivity check |
+| GET | `/health/chroma` | ChromaDB connectivity check |
+| GET | `/health/ollama` | Ollama and configured-model readiness |
+| GET | `/health/ready` | Aggregate required-service readiness |
 | POST | `/documents/upload` | Upload a document (`.txt`, `.md`, `.pdf`) |
 | POST | `/documents/{id}/chunk` | Chunk a document (token-based) and persist to PostgreSQL |
 | POST | `/documents/{id}/index` | Generate embeddings and index a document's chunks into ChromaDB |
 | GET | `/documents/{id}/chunks` | List chunks with previews and token counts |
 | GET | `/documents/{id}` | Get document metadata by UUID |
 | GET | `/documents` | List all documents |
+| DELETE | `/documents/{id}` | Delete a document, file, chunks, and vectors |
+| POST | `/documents/{id}/process` | Queue durable chunking and indexing work |
+| GET | `/documents/{id}/jobs` | List recent ingestion jobs |
+| GET | `/jobs/{id}` | Get ingestion progress and status |
+| POST | `/jobs/{id}/retry` | Retry a failed or cancelled ingestion job |
 | GET | `/search?q=...&k=5` | Semantic search across all indexed chunks |
 | POST | `/answer` | Single-turn Q&A — grounded answer + sources (no history) |
+| POST | `/answer/stream` | Streaming single-turn Q&A over SSE |
 | POST | `/conversations` | Create a new conversation session |
 | GET | `/conversations/{id}` | Retrieve conversation metadata and message history |
 | POST | `/conversations/{id}/messages` | Send a message — history-aware grounded answer + sources |
+| POST | `/conversations/{id}/messages/stream` | Stream a history-aware answer over SSE |
+| GET | `/models` | List installed Ollama models and runtime status |
+| GET | `/models/configured` | Inspect the configured model |
 
-## Roadmap
+## Continuous integration
 
-| PR | Scope |
-|---|---|
-| PR 1 | Project skeleton, health endpoint, config |
-| PR 2 | Docker Compose for API, PostgreSQL, ChromaDB |
-| PR 3 | Database models, SQLAlchemy, Alembic migrations |
-| PR 4 | Document upload, text extraction, file storage |
-| PR 5 | Text chunking, chunk persistence in PostgreSQL |
-| PR 6 | Embeddings with sentence-transformers + ChromaDB storage |
-| PR 7 | Semantic retrieval with ChromaDB vector search |
-| PR 8 | Grounded answer generation via local Ollama |
-| PR 9 | Conversation history, multi-turn chat sessions |
-| PR 10 (this) | Structured source citations, citation rules in prompt |
+The CI workflow gates backend lint and tests, frontend lint, typechecking,
+tests and production build, Alembic head validation, and every supported
+Compose configuration. The integration suite uses real PostgreSQL and Chroma
+with deterministic embeddings and a mocked Ollama; a real-Ollama smoke test is
+opt-in so CI never downloads models implicitly.

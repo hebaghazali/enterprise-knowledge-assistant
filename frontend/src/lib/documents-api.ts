@@ -50,8 +50,28 @@ export interface IndexingSummary {
   chroma_collection: string;
 }
 
+export interface JobAccepted {
+  job_id: string;
+  document_id: string;
+  status: string;
+}
+
+export interface IngestionJob extends JobAccepted {
+  predecessor_job_id: string | null;
+  job_type: string;
+  current_stage: string | null;
+  progress_current: number;
+  progress_total: number;
+  attempt_count: number;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 const STATUS_MAP: Record<string, DocStatus> = {
   uploaded: "Uploaded",
+  queued: "Queued",
   processing: "Processing",
   chunked: "Chunked",
   vector_indexed: "Vector Indexed",
@@ -116,4 +136,20 @@ export function indexDocument(documentId: string): Promise<IndexingSummary> {
   return apiFetch(`/documents/${encodeURIComponent(documentId)}/index`, {
     method: "POST",
   });
+}
+
+export function deleteDocument(documentId: string): Promise<void> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+}
+
+export function processDocument(documentId: string): Promise<JobAccepted> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}/process`, { method: "POST" });
+}
+
+export function listDocumentJobs(documentId: string): Promise<IngestionJob[]> {
+  return apiFetch(`/documents/${encodeURIComponent(documentId)}/jobs`);
+}
+
+export function retryIngestionJob(jobId: string): Promise<JobAccepted> {
+  return apiFetch(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
 }

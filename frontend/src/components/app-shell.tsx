@@ -9,9 +9,10 @@ import {
   Cpu,
   Sparkles,
   Search,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getDatabaseHealth, getHealth, getServiceInfo } from "@/lib/system-api";
+import { getReadiness, getServiceInfo } from "@/lib/system-api";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -20,6 +21,7 @@ const nav = [
   { to: "/ask", label: "Ask", icon: MessageSquare },
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
   { to: "/architecture", label: "Architecture", icon: Cpu },
+  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -30,29 +32,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     staleTime: Infinity,
     retry: 1,
   });
-  const apiHealth = useQuery({
-    queryKey: ["system", "health"],
-    queryFn: getHealth,
+  const readiness = useQuery({
+    queryKey: ["system", "readiness"],
+    queryFn: getReadiness,
     refetchInterval: 15_000,
     retry: 1,
   });
-  const databaseHealth = useQuery({
-    queryKey: ["system", "database"],
-    queryFn: getDatabaseHealth,
-    refetchInterval: 15_000,
-    retry: 1,
-  });
-
-  const checking = apiHealth.isPending || databaseHealth.isPending;
-  const apiOnline = apiHealth.data?.status === "ok";
-  const databaseOnline =
-    databaseHealth.data?.status === "ok" && databaseHealth.data.database === "connected";
+  const checking = readiness.isPending;
+  const failedService = readiness.data
+    ? Object.entries(readiness.data.services).find(([, value]) => value.status !== "ok")
+    : null;
   const status = checking
     ? { label: "Checking services…", className: "bg-[var(--color-warning)]" }
-    : !apiOnline
+    : readiness.isError
       ? { label: "API unavailable", className: "bg-[var(--color-destructive)]" }
-      : !databaseOnline
-        ? { label: "Database unavailable", className: "bg-[var(--color-warning)]" }
+      : failedService
+        ? {
+            label: `${failedService[0][0].toUpperCase()}${failedService[0].slice(1)} unavailable`,
+            className: "bg-[var(--color-warning)]",
+          }
         : { label: "All systems operational", className: "bg-[var(--color-success)]" };
 
   return (

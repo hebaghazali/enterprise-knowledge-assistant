@@ -1,4 +1,5 @@
 import { apiFetch } from "./api-client";
+import { postSse, type StreamCallbacks } from "./sse-client";
 
 export interface AnswerSource {
   chunk_id: string;
@@ -28,4 +29,13 @@ export function askQuestion(question: string, k = 5): Promise<AnswerResponse> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, k }),
   });
+}
+
+export function streamAnswer(
+  question: string,
+  k: number,
+  signal: AbortSignal,
+  callbacks: StreamCallbacks,
+): Promise<AnswerResponse> {
+  return postSse("/answer/stream", { question, k }, signal, callbacks);
 }

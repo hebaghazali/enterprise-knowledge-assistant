@@ -1,9 +1,20 @@
 services:
+  migrate:
+    build: .
+    container_name: eka-migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://eka_user:eka_password@postgres:5432/eka_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     container_name: eka-api
-    ports:
-      - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./alembic:/app/alembic
@@ -18,17 +29,76 @@ services:
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       chromadb:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build: .
+    container_name: eka-worker
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - ./app:/app/app
+      - ./storage:/app/storage
+      - hf_cache:/root/.cache/huggingface
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://eka_user:eka_password@postgres:5432/eka_db
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      chromadb:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: eka-frontend
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      api:
+        condition: service_healthy
+
+  gateway:
+    image: caddy:2.10.2-alpine
+    container_name: eka-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - frontend
 
   postgres:
     image: postgres:16
     container_name: eka-postgres
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_USER: eka_user
       POSTGRES_PASSWORD: eka_password
@@ -42,10 +112,8 @@ services:
       retries: 5
 
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.9
     container_name: eka-chromadb
-    ports:
-      - "8001:8000"
     volumes:
       - chroma_data:/chroma/chroma
 

@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +30,18 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     ollama_timeout_seconds: int = 120
+    worker_poll_interval_seconds: float = 2.0
+    worker_stale_after_seconds: int = 300
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def normalize_debug(cls, value: object) -> object:
+        if isinstance(value, str):
+            if value.lower() in {"release", "production", "prod"}:
+                return False
+            if value.lower() in {"development", "debug", "dev"}:
+                return True
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

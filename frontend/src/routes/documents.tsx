@@ -1,13 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, Eye, Layers, Sparkles, AlertCircle } from "lucide-react";
+import { Upload, FileText, Eye, Layers, Sparkles, AlertCircle, Trash2 } from "lucide-react";
 import { DocumentDetails } from "@/components/document-details";
-import { chunkDocument, indexDocument, listDocuments, uploadDocument } from "@/lib/documents-api";
+import {
+  chunkDocument,
+  deleteDocument,
+  indexDocument,
+  listDocumentJobs,
+  listDocuments,
+  processDocument,
+  retryIngestionJob,
+  uploadDocument,
+} from "@/lib/documents-api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Document } from "@/types/document";
 
 export const Route = createFileRoute("/documents")({
@@ -39,6 +59,39 @@ function DocumentsPage() {
     },
   });
 
+  const jobQueries = useQueries({
+    queries: docs.map((document) => ({
+      queryKey: ["document", document.id, "jobs"],
+      queryFn: () => listDocumentJobs(document.id),
+      refetchInterval: (query: { state: { data?: { status: string }[] } }) => {
+        const latest = query.state.data?.[0];
+        return latest && ["queued", "running"].includes(latest.status) ? 2_000 : false;
+      },
+      retry: 1,
+    })),
+  });
+  const latestJobs = new Map(
+    docs.map((document, index) => [document.id, jobQueries[index]?.data?.[0]]),
+  );
+
+  const processMutation = useMutation({
+    mutationFn: processDocument,
+    onSettled: (_data, _error, documentId) => {
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({ queryKey: ["document", documentId, "jobs"] });
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: ({ jobId }: { jobId: string; documentId: string }) => retryIngestionJob(jobId),
+    onSettled: (_data, _error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["document", variables.documentId, "jobs"],
+      });
+    },
+  });
+
   const chunkMutation = useMutation({
     mutationFn: (documentId: string) => chunkDocument(documentId),
     onSettled: (_data, _error, documentId) => {
@@ -52,6 +105,16 @@ function DocumentsPage() {
     onSettled: (_data, _error, documentId) => {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteDocument,
+    onSuccess: (_data, documentId) => {
+      if (viewing?.id === documentId) setViewing(null);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      void queryClient.invalidateQueries({ queryKey: ["search"] });
     },
   });
 
@@ -198,78 +261,153 @@ function DocumentsPage() {
                     </td>
                   </tr>
                 ) : (
-                  docs.map((d) => (
-                    <tr
-                      key={d.id}
-                      className="border-b border-border/60 last:border-0 hover:bg-secondary/40"
-                    >
-                      <td className="px-5 py-3">
-                        <div>
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-secondary text-primary">
-                              <FileText className="h-4 w-4" />
+                  docs.map((d) => {
+                    const latestJob = latestJobs.get(d.id);
+                    const jobActive = latestJob && ["queued", "running"].includes(latestJob.status);
+                    return (
+                      <tr
+                        key={d.id}
+                        className="border-b border-border/60 last:border-0 hover:bg-secondary/40"
+                      >
+                        <td className="px-5 py-3">
+                          <div>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-secondary text-primary">
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <span className="truncate font-medium">{d.name}</span>
                             </div>
-                            <span className="truncate font-medium">{d.name}</span>
+                            {chunkMutation.isError && chunkMutation.variables === d.id && (
+                              <div className="mt-1 text-xs text-[var(--color-destructive)]">
+                                Chunking failed: {chunkMutation.error.message}
+                              </div>
+                            )}
+                            {indexMutation.isError && indexMutation.variables === d.id && (
+                              <div className="mt-1 text-xs text-[var(--color-destructive)]">
+                                Indexing failed: {indexMutation.error.message}
+                              </div>
+                            )}
+                            {latestJob && (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {latestJob.status === "running"
+                                  ? `${latestJob.current_stage ?? "processing"}${
+                                      latestJob.progress_total
+                                        ? ` · ${latestJob.progress_current}/${latestJob.progress_total}`
+                                        : ""
+                                    }`
+                                  : latestJob.status}
+                                {latestJob.error_message ? ` · ${latestJob.error_message}` : ""}
+                              </div>
+                            )}
                           </div>
-                          {chunkMutation.isError && chunkMutation.variables === d.id && (
-                            <div className="mt-1 text-xs text-[var(--color-destructive)]">
-                              Chunking failed: {chunkMutation.error.message}
+                        </td>
+                        <td className="px-3 py-3 text-muted-foreground">{d.type}</td>
+                        <td className="px-3 py-3">
+                          <StatusBadge status={d.status} />
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {d.chunks.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-3 text-muted-foreground">{d.createdAt}</td>
+                        <td className="px-5 py-3">
+                          <div className="flex justify-end gap-1">
+                            {latestJob?.status === "failed" ? (
+                              <Button
+                                size="sm"
+                                disabled={retryMutation.isPending}
+                                onClick={() =>
+                                  retryMutation.mutate({
+                                    jobId: latestJob.job_id,
+                                    documentId: d.id,
+                                  })
+                                }
+                              >
+                                Retry
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled={Boolean(jobActive) || processMutation.isPending}
+                                onClick={() => processMutation.mutate(d.id)}
+                              >
+                                <Sparkles /> {jobActive ? "Processing…" : "Process"}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={
+                                d.status !== "Uploaded" ||
+                                chunkMutation.isPending ||
+                                indexMutation.isPending ||
+                                Boolean(jobActive)
+                              }
+                              onClick={() => chunkMutation.mutate(d.id)}
+                            >
+                              <Layers />{" "}
+                              {chunkMutation.isPending && chunkMutation.variables === d.id
+                                ? "Chunking…"
+                                : "Chunk"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={
+                                d.status !== "Chunked" ||
+                                chunkMutation.isPending ||
+                                indexMutation.isPending ||
+                                Boolean(jobActive)
+                              }
+                              onClick={() => indexMutation.mutate(d.id)}
+                            >
+                              <Sparkles />{" "}
+                              {indexMutation.isPending && indexMutation.variables === d.id
+                                ? "Indexing…"
+                                : "Index"}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setViewing(d)}>
+                              <Eye /> View
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={deleteMutation.isPending || Boolean(jobActive)}
+                                  aria-label={`Delete ${d.name}`}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {d.name}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This removes the uploaded file, stored chunks, and its vectors.
+                                    This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-[var(--color-destructive)] text-white"
+                                    onClick={() => deleteMutation.mutate(d.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                          {deleteMutation.isError && deleteMutation.variables === d.id && (
+                            <div className="mt-1 text-right text-xs text-[var(--color-destructive)]">
+                              {deleteMutation.error.message}
                             </div>
                           )}
-                          {indexMutation.isError && indexMutation.variables === d.id && (
-                            <div className="mt-1 text-xs text-[var(--color-destructive)]">
-                              Indexing failed: {indexMutation.error.message}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">{d.type}</td>
-                      <td className="px-3 py-3">
-                        <StatusBadge status={d.status} />
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">
-                        {d.chunks.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">{d.createdAt}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={
-                              d.status !== "Uploaded" ||
-                              chunkMutation.isPending ||
-                              indexMutation.isPending
-                            }
-                            onClick={() => chunkMutation.mutate(d.id)}
-                          >
-                            <Layers />{" "}
-                            {chunkMutation.isPending && chunkMutation.variables === d.id
-                              ? "Chunking…"
-                              : "Chunk"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={
-                              d.status !== "Chunked" ||
-                              chunkMutation.isPending ||
-                              indexMutation.isPending
-                            }
-                            onClick={() => indexMutation.mutate(d.id)}
-                          >
-                            <Sparkles />{" "}
-                            {indexMutation.isPending && indexMutation.variables === d.id
-                              ? "Indexing…"
-                              : "Index"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setViewing(d)}>
-                            <Eye /> View
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

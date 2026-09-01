@@ -23,25 +23,16 @@ class AnswerResult:
     latency_ms: int
 
 
-async def generate_answer(
+def prepare_answer(
     question: str,
     k: int,
-    model: str,
-    base_url: str,
-    timeout: int,
     history: list[dict[str, str]] | None = None,
-) -> AnswerResult:
+) -> tuple[str, list[AnswerSourceResponse], list[CitationResponse]]:
     chunks = retrieve(question, k)
-
     if not chunks:
         raise RetrievalEmptyError("No relevant chunks found for the given question.")
 
     prompt = build_prompt(question, chunks, history=history)
-
-    start = time.monotonic()
-    answer_text = await call_ollama(prompt, model, base_url, timeout)
-    latency_ms = int((time.monotonic() - start) * 1000)
-
     sources = [
         AnswerSourceResponse(
             chunk_id=c.chunk_id,
@@ -53,7 +44,6 @@ async def generate_answer(
         )
         for c in chunks
     ]
-
     citations = [
         CitationResponse(
             source_number=i,
@@ -66,6 +56,22 @@ async def generate_answer(
         )
         for i, c in enumerate(chunks, start=1)
     ]
+    return prompt, sources, citations
+
+
+async def generate_answer(
+    question: str,
+    k: int,
+    model: str,
+    base_url: str,
+    timeout: int,
+    history: list[dict[str, str]] | None = None,
+) -> AnswerResult:
+    prompt, sources, citations = prepare_answer(question, k, history=history)
+
+    start = time.monotonic()
+    answer_text = await call_ollama(prompt, model, base_url, timeout)
+    latency_ms = int((time.monotonic() - start) * 1000)
 
     return AnswerResult(
         answer=answer_text,

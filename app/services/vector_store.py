@@ -69,3 +69,27 @@ def upsert_chunks(
         )
     except Exception as exc:
         raise RuntimeError(f"ChromaDB operation failed: {exc}") from exc
+
+
+def delete_chunks_by_document(collection_name: str, document_id: str) -> None:
+    """Remove every vector belonging to a document.
+
+    Chroma is a separate datastore, so callers must perform this cleanup before
+    replacing or deleting the corresponding relational rows.
+    """
+    try:
+        client = _make_client()
+        collection = client.get_or_create_collection(name=collection_name)
+        collection.delete(where={"document_id": document_id})
+    except Exception as exc:
+        raise RuntimeError(f"ChromaDB operation failed: {exc}") from exc
+
+
+def chroma_health() -> dict[str, str | int]:
+    """Return a small, safe connectivity summary for readiness checks."""
+    try:
+        client = _make_client()
+        heartbeat = client.heartbeat()
+        return {"status": "ok", "heartbeat": int(heartbeat)}
+    except Exception as exc:
+        raise RuntimeError(f"ChromaDB is unavailable: {exc}") from exc

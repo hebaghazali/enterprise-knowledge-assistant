@@ -2,8 +2,17 @@ import re
 
 from transformers import AutoTokenizer
 
-# Loaded once at import time; cached in ~/.cache/huggingface after first download.
-_TOKENIZER = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+# Loaded lazily on first use; cached in ~/.cache/huggingface after first download.
+_TOKENIZER = None
+
+
+def _get_tokenizer():
+    global _TOKENIZER
+    if _TOKENIZER is None:
+        _TOKENIZER = AutoTokenizer.from_pretrained(
+            "sentence-transformers/all-MiniLM-L6-v2"
+        )
+    return _TOKENIZER
 
 
 def _clean_text(text: str) -> str:
@@ -41,7 +50,7 @@ def estimate_token_count(text: str) -> int:
     """
     if not text:
         return 0
-    return len(_TOKENIZER.encode(text, add_special_tokens=False))
+    return len(_get_tokenizer().encode(text, add_special_tokens=False))
 
 
 def chunk_text(
@@ -80,7 +89,7 @@ def chunk_text(
     if not text.strip():
         return []
 
-    encoding = _TOKENIZER(
+    encoding = _get_tokenizer()(
         text,
         add_special_tokens=False,
         return_offsets_mapping=True,
