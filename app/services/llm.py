@@ -17,7 +17,12 @@ class OllamaUnavailableError(RuntimeError):
 
 
 async def call_ollama(prompt: str, model: str, base_url: str, timeout: int) -> str:
-    payload = {"model": model, "prompt": prompt, "stream": False}
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1},
+    }
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(f"{base_url}/api/generate", json=payload)
@@ -76,7 +81,12 @@ async def stream_ollama(
     prompt: str, model: str, base_url: str, timeout: int
 ) -> AsyncIterator[dict]:
     """Yield token and completion dictionaries from Ollama's NDJSON stream."""
-    payload = {"model": model, "prompt": prompt, "stream": True}
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": 0.1},
+    }
     received_text = False
     completed = False
     try:

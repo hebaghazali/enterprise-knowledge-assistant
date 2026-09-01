@@ -255,5 +255,5 @@ def test_answer_stream_orders_sources_tokens_and_completion():
     assert response.status_code == 200
     assert response.text.index("event: sources") < response.text.index("event: token")
     assert response.text.index("event: token") < response.text.index("event: complete")
-    assert '"answer": "Remote work."' in response.text
+    assert '"answer": "Remote work. [Source 1]"' in response.text
     db.commit.assert_awaited()

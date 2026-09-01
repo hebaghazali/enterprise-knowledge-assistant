@@ -612,7 +612,13 @@ Each citation in the response contains:
 
 The `sources` field is retained unchanged (200-character preview) for backward compatibility.
 
-**Limitation:** In this release, `citations` is derived directly from retrieved chunks rather than parsed from the generated answer. The model is instructed to cite only from the provided context, but whether each `[Source N]` in the answer exactly matches the citation list is not validated. Parsing and cross-referencing inline citations is planned for a future release.
+The answer pipeline treats `k` as a retrieval ceiling and removes candidates
+whose similarity score is not close to the best match before generation. The
+margin is configurable with `ANSWER_RELEVANCE_SCORE_MARGIN` (default `0.05`).
+The `sources` field reports the context sent to the model, while `citations`
+contains only `[Source N]` references present in the completed answer. A
+supported single-source answer receives a deterministic source reference if a
+small local model omits the requested inline citation.
 
 ## Endpoints
 

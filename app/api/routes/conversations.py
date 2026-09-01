@@ -22,6 +22,7 @@ from app.schemas.conversations import (
 from app.services.answering import (
     AnswerResult,
     RetrievalEmptyError,
+    finalize_answer_citations,
     generate_answer,
     prepare_answer,
 )
@@ -259,7 +260,6 @@ async def stream_message(
             "sources",
             {
                 "sources": [source.model_dump() for source in sources],
-                "citations": [citation.model_dump() for citation in citations],
             },
         )
         try:
@@ -280,6 +280,14 @@ async def stream_message(
 
             assistant_id = uuid.uuid4()
             answer_text = "".join(answer_parts)
+            answer_text, answer_citations = finalize_answer_citations(
+                answer_text, citations
+            )
+            streamed_text = "".join(answer_parts)
+            if answer_text != streamed_text:
+                suffix = answer_text[len(streamed_text) :]
+                answer_parts.append(suffix)
+                yield sse_event("token", {"text": suffix})
             db.add(
                 Message(
                     id=assistant_id,
@@ -301,7 +309,9 @@ async def stream_message(
                     "conversation_id": str(conversation_id),
                     "message_id": str(assistant_id),
                     "answer": answer_text,
-                    "citations": [citation.model_dump() for citation in citations],
+                    "citations": [
+                        citation.model_dump() for citation in answer_citations
+                    ],
                     "sources": [source.model_dump() for source in sources],
                     "model": settings.ollama_model,
                     "usage": usage,

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     upload_dir: str = "storage/uploads"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     max_query_tokens: int = 512
+    answer_relevance_score_margin: float = 0.05
 
     cors_allowed_origins: list[str] = [
         "http://localhost:5173",

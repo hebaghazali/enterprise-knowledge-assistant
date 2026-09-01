@@ -9,7 +9,13 @@ from app.db.session import get_db_session
 from app.main import app
 from app.schemas.answering import AnswerSourceResponse, CitationResponse
 from app.schemas.retrieval import SearchResultResponse
-from app.services.answering import AnswerResult, RetrievalEmptyError
+from app.services.answering import (
+    AnswerResult,
+    RetrievalEmptyError,
+    citations_for_answer,
+    finalize_answer_citations,
+    select_answer_chunks,
+)
 from app.services.llm import OllamaUnavailableError, call_ollama
 from app.services.prompting import build_prompt
 
@@ -98,6 +104,17 @@ def test_prompt_includes_dont_know_instruction():
     assert "I don't know based on the provided documents" in prompt
 
 
+def test_prompt_treats_paraphrases_as_supported_matches():
+    prompt = build_prompt("What is our PTO policy?", [_FAKE_CHUNK])
+    assert "synonyms, abbreviations, and paraphrases" in prompt
+    assert "Ignore unrelated sources" in prompt
+
+
+def test_prompt_places_context_before_current_question():
+    prompt = build_prompt("What is our PTO policy?", [_FAKE_CHUNK])
+    assert prompt.index("<document_context>") < prompt.index("<question>")
+
+
 def test_prompt_numbers_multiple_sources():
     chunk2 = SearchResultResponse(
         chunk_id="chunk-2",
@@ -113,6 +130,56 @@ def test_prompt_numbers_multiple_sources():
     assert "[Source 2]" in prompt
     assert "handbook.txt" in prompt
     assert "policy.txt" in prompt
+
+
+def test_citations_include_only_referenced_sources():
+    second = _FAKE_CITATION.model_copy(
+        update={"source_number": 2, "chunk_id": "chunk-2"}
+    )
+    selected = citations_for_answer(
+        "The policy allows three days. [Source 1]", [_FAKE_CITATION, second]
+    )
+    assert [citation.source_number for citation in selected] == [1]
+
+
+def test_fallback_answer_has_no_citations():
+    assert (
+        citations_for_answer(
+            "I don't know based on the provided documents.", [_FAKE_CITATION]
+        )
+        == []
+    )
+
+
+def test_single_source_answer_gets_a_deterministic_citation():
+    answer, citations = finalize_answer_citations(
+        "Employees receive 25 days annually.", [_FAKE_CITATION]
+    )
+    assert answer.endswith("[Source 1]")
+    assert citations == [_FAKE_CITATION]
+
+
+def test_single_source_fallback_does_not_get_a_citation():
+    answer, citations = finalize_answer_citations(
+        "I don't know based on the provided documents.", [_FAKE_CITATION]
+    )
+    assert answer == "I don't know based on the provided documents."
+    assert citations == []
+
+
+def test_answer_context_keeps_only_chunks_close_to_best_score():
+    close = _FAKE_CHUNK.model_copy(
+        update={"chunk_id": "close", "similarity_score": 0.87}
+    )
+    irrelevant = _FAKE_CHUNK.model_copy(
+        update={"chunk_id": "irrelevant", "similarity_score": 0.72}
+    )
+    selected = select_answer_chunks([_FAKE_CHUNK, close, irrelevant], 0.05)
+    assert [chunk.chunk_id for chunk in selected] == ["chunk-1", "close"]
+
+
+def test_answer_context_always_keeps_best_chunk():
+    assert select_answer_chunks([_FAKE_CHUNK], 0.0) == [_FAKE_CHUNK]
 
 
 def test_prompt_includes_chunk_id():
@@ -138,6 +205,9 @@ async def test_call_ollama_success():
         result = await call_ollama("prompt text", "llama3.1:8b", "http://localhost:11434", 120)
 
     assert result == "The answer is 42."
+    assert mock_client.post.call_args.kwargs["json"]["options"] == {
+        "temperature": 0.1
+    }
 
 
 async def test_call_ollama_timeout():
